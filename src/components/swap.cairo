@@ -203,12 +203,12 @@ pub fn assert_max_slippage(
 
 #[cfg(test)]
 mod test_swaps {
-    use strkfarm::tests::constants;
+    use strkfarm_contracts::helpers::constants;
     use starknet::{
         ContractAddress, get_contract_address, get_block_timestamp,
         contract_address::contract_address_const
     };
-    use strkfarm::interfaces::oracle::{
+    use strkfarm_contracts::interfaces::oracle::{
         IPriceOracle, IPriceOracleDispatcher, IPriceOracleDispatcherTrait
     };
 

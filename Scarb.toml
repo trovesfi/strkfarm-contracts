@@ -75,3 +75,8 @@ block_id.number = "1025136"
 name = "mainnet_971311"
 url = "https://starknet-mainnet.public.blastapi.io/rpc/v0_7"
 block_id.number = "971311"
+
+[[tool.snforge.fork]]
+name = "mainnet_1134787"
+url = "https://starknet-mainnet.public.blastapi.io/rpc/v0_7"
+block_id.number = "1134787"

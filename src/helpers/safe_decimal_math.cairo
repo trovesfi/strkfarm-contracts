@@ -69,6 +69,14 @@ pub fn safe_subtract(a: u256, b: u256) -> u256 {
     a - b
 }
 
+pub fn is_under_by_percent_bps(value: u256, base: u256, percent_bps: u256) -> bool {
+    if (base == 0) {
+        return value == 0;
+    }
+    let factor = value * 10000 / base;
+    return factor <= percent_bps;
+}
+
 // converts absolute amount to wei amount
 pub fn fei_to_wei(etherAmount: u256, decimals: u8) -> u256 {
     etherAmount * pow::ten_pow(decimals.into())

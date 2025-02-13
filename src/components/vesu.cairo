@@ -185,17 +185,17 @@ pub impl vesuSettingsImpl of ILendMod<vesuStruct, vesuToken> {
 
 #[cfg(test)]
 mod tests {
-    use strkfarm::interfaces::lendcomp::ILendMod;
-    use strkfarm::tests::constants;
+    use strkfarm_contracts::interfaces::lendcomp::ILendMod;
+    use strkfarm_contracts::helpers::constants;
     use super::{vesuStruct, vesuToken};
-    use strkfarm::interfaces::IVesu::{IStonDispatcher, IStonDispatcherTrait};
+    use strkfarm_contracts::interfaces::IVesu::{IStonDispatcher, IStonDispatcherTrait};
     use starknet::{ContractAddress, get_contract_address, get_caller_address};
     use starknet::contract_address::contract_address_const;
     use snforge_std::{
         declare, ContractClassTrait, start_cheat_caller_address, stop_cheat_caller_address
     };
-    use strkfarm::helpers::ERC20Helper;
-    use strkfarm::external::pow;
+    use strkfarm_contracts::helpers::ERC20Helper;
+    use strkfarm_contracts::helpers::pow;
 
     #[test]
     #[fork("mainnet_971311")]

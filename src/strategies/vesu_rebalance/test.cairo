@@ -15,10 +15,10 @@ pub mod test_vesu_rebalance {
   };
   use strkfarm_contracts::helpers::ERC20Helper;
   use strkfarm_contracts::helpers::pow;
-  use strkfarm_contracts::strategies::vesu_rebalance::vesu_rebalance::{PoolProps, Settings, BorrowSettings, Action, Feature};
+  use strkfarm_contracts::strategies::vesu_rebalance::interface::{PoolProps, Settings, BorrowSettings, Action, Feature};
   use strkfarm_contracts::components::vesu::{vesuStruct, vesuToken, vesuSettingsImpl};
   use strkfarm_contracts::interfaces::IVesu::{IStonDispatcher, IStonDispatcherTrait};
-  use strkfarm_contracts::strategies::vesu_rebalance::vesu_rebalance::{IVesuRebalDispatcher, IVesuRebalDispatcherTrait};
+  use strkfarm_contracts::strategies::vesu_rebalance::interface::{IVesuRebalDispatcher, IVesuRebalDispatcherTrait};
   use strkfarm_contracts::interfaces::IERC4626::{IERC4626, IERC4626Dispatcher, IERC4626DispatcherTrait};
   use openzeppelin::utils::serde::SerializedAppend;
 

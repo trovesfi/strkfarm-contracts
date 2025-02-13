@@ -1,71 +1,3 @@
-use starknet::{ContractAddress};
-
-#[derive(PartialEq, Copy, Drop, Serde, Default)]
-pub enum Feature {
-  #[default]
-  DEPOSIT,
-  WITHDRAW
-}
-
-#[derive(PartialEq, Drop, Copy, Serde)]
-pub struct Action {
-  pub pool_id: felt252,
-  pub feature: Feature, 
-  // should be asset() when borrowing not enabled
-  pub token: ContractAddress,
-  pub amount: u256
-}
-
-#[derive(Drop, Copy, Serde, starknet::Store)]
-pub struct PoolProps {
-  pub pool_id: felt252, // vesu pool id
-  pub max_weight: u32, // in bps relative to total_assets
-  pub v_token: ContractAddress,
-}
-
-#[derive(Drop, Copy, Serde, starknet::Store)]
-pub struct BorrowSettings {
-  pub is_borrowing_allowed: bool,
-  pub min_health_factor: u32,
-  pub target_health_factor: u32,
-}
-
-#[derive(Drop, Copy, Serde, starknet::Store)]
-// vault general settings
-pub struct Settings {
-  pub default_pool_index: u8,
-  pub fee_percent: u32,
-  pub fee_receiver: ContractAddress
-}
-
-#[starknet::interface]
-pub trait IVesuRebal<TContractState> {
-  fn rebalance(ref self: TContractState, actions: Array<Action>);
-  fn compute_yield(self: @TContractState) -> (u256, u256);
-  
-  // =================
-  // @audit below set of functions ton be internal
-  // ===============
-  // setters
-  fn set_settings(ref self: TContractState, settings: Settings);
-  fn set_allowed_pools(ref self: TContractState, pools: Array<PoolProps>);
-  fn set_borrow_settings(ref self: TContractState, borrow_settings: BorrowSettings);
-
-  // getters
-  fn get_settings(self: @TContractState) -> Settings;
-  fn get_allowed_pools(self: @TContractState) -> Array<PoolProps>;
-  fn get_borrow_settings(self: @TContractState) -> BorrowSettings;
-  fn get_previous_index(self: @TContractState) -> u128;
-  // @audit add setters for
-  // set_allowed_pools(Array<PoolProps>);
-  // set_borrow_settings(BorrowSettings);
-
-  // @audit getters to add
-  // get_allowed_pools() -> Array<PoolProps>
-  // get_settings() -> Settings
-  // get_previous_index() -> u128
-}
-
 #[starknet::contract]
 mod VesuRebalance {
   use starknet::{ContractAddress, get_contract_address};
@@ -116,7 +48,7 @@ mod VesuRebalance {
   impl ERC20InternalImpl = ERC20Component::InternalImpl<ContractState>;
   impl ReentrancyGuardInternalImpl = ReentrancyGuardComponent::InternalImpl<ContractState>;
 
-  use super::{IVesuRebal, Action, Feature, BorrowSettings, PoolProps, Settings};
+  use strkfarm_contracts::strategies::vesu_rebalance::interface::{IVesuRebal, Action, Feature, BorrowSettings, PoolProps, Settings};
 
   pub mod Errors {
     pub const INVALID_YIELD: felt252 = 'Insufficient yield';
@@ -226,22 +158,16 @@ mod VesuRebalance {
     fn rebalance(ref self: ContractState, actions: Array<Action>) {
       // perform rebalance
       let (yield_before_rebalance, _ ) = self.compute_yield();
-      println!("before yeild {:?}", yield_before_rebalance);
       self._collect_fees();
-      println!("collect fees done");
       self._rebal_loop(actions);
-      println!("loop done");
       let (yield_after_rebalance, total_amount) = self.compute_yield();
-      println!("after yeild {:?}", yield_after_rebalance);
 
       // post rebalance validations
       let this = get_contract_address();
       assert(yield_after_rebalance > yield_before_rebalance, Errors::INVALID_YIELD);
       assert(ERC20Helper::balanceOf(self.asset(), this) == 0, Errors::UNUTILIZED_ASSET);
       self._assert_hf();
-      println!("prev asserts passed");
       self._assert_max_weights(total_amount);
-      println!("max weights passed");
 
       self.emit(
         Rebalance {
@@ -523,7 +449,6 @@ mod VesuRebalance {
         Feature::DEPOSIT => {
           ERC20Helper::approve(self.asset(), *v_token, action.amount);
           IERC4626Dispatcher {contract_address: *v_token}.deposit(action.amount, this);
-          println!("v_token {:?}", ERC20Helper::balanceOf(*v_token, this));
         },
         Feature::WITHDRAW => {
           let max_withdraw_vault = self._calculate_max_withdraw(*v_token);
@@ -535,19 +460,14 @@ mod VesuRebalance {
             this,
             this
           );
-          println!("v_token {:?}", ERC20Helper::balanceOf(*v_token, this));
         },
       };
     }
 
     fn _perform_withdraw_max_possible(ref self: ContractState, pool_id: felt252, v_token: ContractAddress, amount: u256) -> u256 {
-      println!("default withdraw flow");
       let this = get_contract_address();
       let max_withdraw_vault = self._calculate_max_withdraw(v_token);
-      println!("max withdraw vault {:?}", max_withdraw_vault);
       let max_withdraw_pool = self._calculate_max_withdraw_pool(pool_id, self.asset());
-      println!("max withdraw pool {:?}", max_withdraw_pool);
-      println!("amount {:?}", amount);
       let withdraw_amount = if max_withdraw_pool >= amount {
         if max_withdraw_vault > amount {
           amount
@@ -564,8 +484,6 @@ mod VesuRebalance {
       if (withdraw_amount == 0) {
         return 0;
       }
-
-      println!("withdraw amount {:?}", withdraw_amount);
 
       IERC4626Dispatcher {contract_address: v_token}.withdraw(
         withdraw_amount,
@@ -677,7 +595,6 @@ mod VesuRebalance {
       // deposit normally 
       let default_pool_index = contract_state.settings.default_pool_index.read();
       let v_token = *pool_ids_array.at(default_pool_index.into()).v_token;
-      println!("deposit v token {:?}", v_token);
       ERC20Helper::approve(self.asset(), v_token, assets);
       IERC4626Dispatcher {contract_address: v_token}.deposit(assets, this);
       contract_state._collect_fees();
@@ -691,7 +608,6 @@ mod VesuRebalance {
       let mut contract_state = self.get_contract_mut();
       let this = get_contract_address();
       contract_state._collect_fees();
-      println!("withdraw collect fees");
       let mut pool_ids_array = contract_state._get_pool_data();
       let default_id = contract_state.settings.read().default_pool_index;
       let default_pool_info = pool_ids_array.at(default_id.into());
@@ -703,7 +619,6 @@ mod VesuRebalance {
         assets
       );
 
-      println!("default withdraw done");
 
       if (default_pool_withdrawn == assets) {
         return;

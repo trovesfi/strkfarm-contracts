@@ -1,0 +1,67 @@
+use starknet::{ContractAddress};
+
+#[derive(PartialEq, Copy, Drop, Serde, Default)]
+pub enum Feature {
+  #[default]
+  DEPOSIT,
+  WITHDRAW
+}
+
+#[derive(PartialEq, Drop, Copy, Serde)]
+pub struct Action {
+  pub pool_id: felt252,
+  pub feature: Feature, 
+  // should be asset() when borrowing not enabled
+  pub token: ContractAddress,
+  pub amount: u256
+}
+
+#[derive(Drop, Copy, Serde, starknet::Store)]
+pub struct PoolProps {
+  pub pool_id: felt252, // vesu pool id
+  pub max_weight: u32, // in bps relative to total_assets
+  pub v_token: ContractAddress,
+}
+
+#[derive(Drop, Copy, Serde, starknet::Store)]
+pub struct BorrowSettings {
+  pub is_borrowing_allowed: bool,
+  pub min_health_factor: u32,
+  pub target_health_factor: u32,
+}
+
+#[derive(Drop, Copy, Serde, starknet::Store)]
+// vault general settings
+pub struct Settings {
+  pub default_pool_index: u8,
+  pub fee_percent: u32,
+  pub fee_receiver: ContractAddress
+}
+
+#[starknet::interface]
+pub trait IVesuRebal<TContractState> {
+  fn rebalance(ref self: TContractState, actions: Array<Action>);
+  fn compute_yield(self: @TContractState) -> (u256, u256);
+  
+  // =================
+  // @audit below set of functions ton be internal
+  // ===============
+  // setters
+  fn set_settings(ref self: TContractState, settings: Settings);
+  fn set_allowed_pools(ref self: TContractState, pools: Array<PoolProps>);
+  fn set_borrow_settings(ref self: TContractState, borrow_settings: BorrowSettings);
+
+  // getters
+  fn get_settings(self: @TContractState) -> Settings;
+  fn get_allowed_pools(self: @TContractState) -> Array<PoolProps>;
+  fn get_borrow_settings(self: @TContractState) -> BorrowSettings;
+  fn get_previous_index(self: @TContractState) -> u128;
+  // @audit add setters for
+  // set_allowed_pools(Array<PoolProps>);
+  // set_borrow_settings(BorrowSettings);
+
+  // @audit getters to add
+  // get_allowed_pools() -> Array<PoolProps>
+  // get_settings() -> Settings
+  // get_previous_index() -> u128
+}
