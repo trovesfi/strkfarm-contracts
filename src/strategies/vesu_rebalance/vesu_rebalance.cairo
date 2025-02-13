@@ -152,9 +152,10 @@ mod VesuRebalance {
 
   #[abi(embed_v0)]
   impl ExternalImpl of IVesuRebal<ContractState> {
-    // todo later
-    // account for situation where rebalancing is done for 
-    // weights adjustment and not for yield
+    /// @notice Rebalances users position in vesu to optimize yield 
+    /// @dev This function computes the yield before and after rebalancing, collects fees, 
+    /// executes rebalancing actions, and performs post-rebalance validations.
+    /// @param actions Array of actions to be performed for rebalancing
     fn rebalance(ref self: ContractState, actions: Array<Action>) {
       // perform rebalance
       let (yield_before_rebalance, _ ) = self.compute_yield();
@@ -177,6 +178,9 @@ mod VesuRebalance {
       );
     }
 
+    // @notice computes overall yeild across all allowed pools
+    // @dev Iterates through allowed pools, calculates yield per pool, and aggregates.
+    // @return (u256, u256) - The weighted average yield and the total amount across pools. 
     fn compute_yield(self: @ContractState) -> (u256, u256) {
       let allowed_pools = self._get_pool_data();
       let mut i = 0;
@@ -200,22 +204,37 @@ mod VesuRebalance {
       ((yield_sum / amount_sum), amount_sum)
     }
 
+    /// @notice Retrieves the contract's current settings.
+    /// @dev Reads and returns the settings stored in the contract state.
+    /// @return settings The current configuration settings of the contract.
     fn get_settings(self: @ContractState) -> Settings {
       self.settings.read()
     }
 
+    /// @notice Returns the list of allowed pools.
+    /// @dev Reads and returns the pool data from the contract state.
+    /// @return allowed_pools An array of pool properties representing the allowed pools.    
     fn get_allowed_pools(self: @ContractState) -> Array<PoolProps> {
       self._get_pool_data()
     }
 
+    /// @notice Retrieves the borrow settings of the contract.
+    /// @dev Reads and returns the borrow settings stored in the contract state.
+    /// @return borrow_settings The current borrow configuration settings.
     fn get_borrow_settings(self: @ContractState) -> BorrowSettings {
       self.borrow_settings.read()
     }
 
+    /// @notice Retrieves the previous index of the contract.
+    /// @dev Reads and returns the previous index stored in the contract state.
+    /// @return previous_index The current borrow configuration settings.
     fn get_previous_index(self: @ContractState) -> u128 {
       self.previous_index.read()
     }
 
+    /// @notice Updates the contract settings.
+    /// @dev Only the contract owner can call this function to modify the settings.
+    /// @param settings The new settings to be stored in the contract.
     fn set_settings(
       ref self: ContractState, 
       settings: Settings
@@ -224,11 +243,17 @@ mod VesuRebalance {
       self.settings.write(settings);
     }
 
+    /// @notice Updates the contract settings.
+    /// @dev Only the contract owner can call this function to modify allowed pools.
+    /// @param pools The new allowed pools to be stored in the contract.
     fn set_allowed_pools(ref self: ContractState, pools: Array<PoolProps>) {
       self.common.assert_only_owner();
       self._set_pool_settings(pools);
     }
 
+    /// @notice Updates the contract's borrow settings.
+    /// @dev Only the contract owner can call this function to modify the borrow settings.
+    /// @param borrow_settings The new borrow settings to be stored in the contract.
     fn set_borrow_settings(ref self: ContractState, borrow_settings: BorrowSettings) {
       self.common.assert_only_owner();
       self.borrow_settings.write(borrow_settings);
@@ -584,6 +609,11 @@ mod VesuRebalance {
   }
   
   impl HooksImpl of ERC4626Component::ERC4626HooksTrait<ContractState> {
+    /// @notice Handles post-deposit operations for ERC-4626 vault deposits.
+    /// @dev This function approves asset transfers, deposits assets into the default pool,
+    /// and collects fees after the deposit.
+    /// @param assets The amount of assets deposited.
+    /// @param shares The number of shares minted in exchange for the deposited assets.
     fn after_deposit(
       ref self:  ERC4626Component::ComponentState<ContractState>,
       assets: u256,
@@ -600,13 +630,18 @@ mod VesuRebalance {
       contract_state._collect_fees();
     }
 
+    /// @notice Handles pre-withdrawal operations to ensure liquidity availability.
+    /// @dev This function first attempts to withdraw from the default pool.
+    /// If the full amount cannot be withdrawn, it asserts that borrowing is disabled
+    /// and withdraws the remaining amount from other pools.
+    /// @param assets The amount of assets to withdraw.
+    /// @param shares The number of shares to redeem.
     fn before_withdraw(
       ref self: ERC4626Component::ComponentState<ContractState>,
       assets: u256,
       shares: u256
      ) {
       let mut contract_state = self.get_contract_mut();
-      let this = get_contract_address();
       contract_state._collect_fees();
       let mut pool_ids_array = contract_state._get_pool_data();
       let default_id = contract_state.settings.read().default_pool_index;
