@@ -1,4 +1,6 @@
 use starknet::{ContractAddress};
+use strkfarm_contracts::interfaces::IEkuboDistributor::{Claim};
+use strkfarm_contracts::components::swap::{AvnuMultiRouteSwap};
 
 #[derive(PartialEq, Copy, Drop, Serde, Default)]
 pub enum Feature {
@@ -44,9 +46,15 @@ pub trait IVesuRebal<TContractState> {
   fn rebalance(ref self: TContractState, actions: Array<Action>);
   fn rebalance_weights(ref self: TContractState, actions: Array<Action>);
   fn emergency_withdraw(ref self: TContractState);
-  fn emergency_escape(ref self: TContractState);
-  fn emergency_withdraw_pool(ref self: TContractState, pool_id: felt252);
+  fn emergency_withdraw_pool(ref self: TContractState, pool_index: u32);
   fn compute_yield(self: @TContractState) -> (u256, u256);
+  fn harvest(
+    ref self: TContractState, 
+    rewardsContract: ContractAddress,
+    claim: Claim, 
+    proof: Span<felt252>, 
+    swapInfo: AvnuMultiRouteSwap
+  );
   
   // =================
   // @audit below set of functions ton be internal
@@ -54,6 +62,7 @@ pub trait IVesuRebal<TContractState> {
   // setters
   fn set_settings(ref self: TContractState, settings: Settings);
   fn set_allowed_pools(ref self: TContractState, pools: Array<PoolProps>);
+  fn set_incentives_off(ref self: TContractState);
 
   // getters
   fn get_settings(self: @TContractState) -> Settings;

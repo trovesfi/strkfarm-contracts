@@ -1,6 +1,7 @@
 #[starknet::contract]
 mod VesuRebalance {
   use starknet::{ContractAddress, get_contract_address, get_caller_address};
+  use starknet::contract_address::{contract_address_const};
   use strkfarm_contracts::helpers::ERC20Helper;
   use strkfarm_contracts::components::common::CommonComp;
   use strkfarm_contracts::components::vesu::{vesuStruct, vesuToken, vesuSettingsImpl};
@@ -12,12 +13,12 @@ mod VesuRebalance {
   use strkfarm_contracts::components::harvester::reward_shares::RewardShareComponent::{
       InternalTrait as RewardShareInternalImpl
   };
+  use strkfarm_contracts::components::harvester::harvester_lib::HarvestBeforeHookResult;
   use strkfarm_contracts::helpers::pow;
   use strkfarm_contracts::interfaces::IERC4626::{IERC4626, IERC4626Dispatcher, IERC4626DispatcherTrait};
   use openzeppelin::security::pausable::{PausableComponent};
   use openzeppelin::upgrades::upgradeable::UpgradeableComponent;
   use openzeppelin::security::reentrancyguard::{ReentrancyGuardComponent};
-  use openzeppelin::access::ownable::ownable::OwnableComponent;
   use openzeppelin::introspection::src5::SRC5Component;
   use openzeppelin::token::erc20::{
     ERC20Component,
@@ -27,12 +28,21 @@ mod VesuRebalance {
   use strkfarm_contracts::components::erc4626::{ERC4626Component};
   use strkfarm_contracts::components::erc4626::ERC4626Component::{FeeConfigTrait, LimitConfigTrait, ERC4626HooksTrait, ImmutableConfig};
   use alexandria_storage::list::{List, ListTrait};
+  use strkfarm_contracts::interfaces::IEkuboDistributor::{Claim};
+  use strkfarm_contracts::components::swap::{AvnuMultiRouteSwap};
+  use strkfarm_contracts::components::harvester::defi_spring_default_style::{
+    SNFStyleClaimSettings, ClaimImpl as DefaultClaimImpl
+  };
+  use strkfarm_contracts::components::harvester::harvester_lib::{
+    HarvestConfig, HarvestConfigImpl,
+    HarvestHooksTrait
+  };
+  use strkfarm_contracts::interfaces::oracle::{IPriceOracleDispatcher};
 
   component!(path: ERC4626Component, storage: erc4626, event: ERC4626Event);
   component!(path: RewardShareComponent, storage: reward_share, event: RewardShareEvent);
   component!(path: ERC20Component, storage: erc20, event: ERC20Event);
   component!(path: SRC5Component, storage: src5, event: SRC5Event);
-  component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
   component!(path: ReentrancyGuardComponent, storage: reng, event: ReentrancyGuardEvent);
   component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
   component!(path: PausableComponent, storage: pausable, event: PausableEvent);
@@ -72,8 +82,6 @@ mod VesuRebalance {
     #[substorage(v0)]
     src5: SRC5Component::Storage,
     #[substorage(v0)]
-    ownable: OwnableComponent::Storage,
-    #[substorage(v0)]
     upgradeable: UpgradeableComponent::Storage,
     #[substorage(v0)]
     pausable: PausableComponent::Storage,
@@ -84,6 +92,7 @@ mod VesuRebalance {
     settings: Settings,
     previous_index: u128,
     vesu_settings: vesuStruct,
+    is_incentives_on: bool,
   }
 
   #[event]
@@ -100,8 +109,6 @@ mod VesuRebalance {
     #[flat]
     SRC5Event: SRC5Component::Event,
     #[flat]
-    OwnableEvent: OwnableComponent::Event,
-    #[flat]
     UpgradeableEvent: UpgradeableComponent::Event,
     #[flat]
     PausableEvent: PausableComponent::Event,
@@ -111,11 +118,10 @@ mod VesuRebalance {
     CollectFees: CollectFees
   }
   
-  // @audit these all u32 (all yield values u32)
   #[derive(Drop, starknet::Event)]
   pub struct Rebalance {
-    yield_before: u256,
-    yield_after: u256, 
+    yield_before: u128,
+    yield_after: u128, 
   }
 
   #[derive(Drop, starknet::Event)]
@@ -139,18 +145,16 @@ mod VesuRebalance {
     self.erc4626.initializer(asset);
     self.common.initializer(access_control);   
     self.set_allowed_pools(allowed_pools);
-    // @audit modified constructor to directly take Settings struct
+
     self.set_settings(settings);
     self.vesu_settings.write(vesu_settings);
+
     // default index 10**18 (i.e. 1)
     self.previous_index.write(DEFAULT_INDEX);
-    // considering owner deployed the access control contract 
-    // already has the DEFAULT_ADMIN_ROLE
-  }
 
-  //task at hand 
-  //write asserts 
-  //fix akira audit issues
+    // since defi spring is active now
+    self.is_incentives_on.write(true);
+  }
 
   #[abi(embed_v0)]
   impl ExternalImpl of IVesuRebal<ContractState> {
@@ -160,23 +164,24 @@ mod VesuRebalance {
     /// @param actions Array of actions to be performed for rebalancing
     fn rebalance(ref self: ContractState, actions: Array<Action>) {
       // perform rebalance
-      self.common.assert_admin_role();
       self.common.assert_not_paused();
-      let (yield_before_rebalance, _ ) = self.compute_yield();
       self._collect_fees();
+
+      // rebalance
+      let (yield_before_rebalance, _ ) = self.compute_yield();
       self._rebal_loop(actions);
-      let (yield_after_rebalance, total_amount) = self.compute_yield();
+      let (yield_after_rebalance, _) = self.compute_yield();
 
       // post rebalance validations
       let this = get_contract_address();
       assert(yield_after_rebalance > yield_before_rebalance, Errors::INVALID_YIELD);
       assert(ERC20Helper::balanceOf(self.asset(), this) == 0, Errors::UNUTILIZED_ASSET);
-      self._assert_max_weights(total_amount);
+      self._assert_max_weights();
 
       self.emit(
         Rebalance {
-          yield_before: yield_before_rebalance,
-          yield_after: yield_after_rebalance
+          yield_before: yield_before_rebalance.try_into().unwrap(),
+          yield_after: yield_after_rebalance.try_into().unwrap()
         }
       );
     }
@@ -186,35 +191,16 @@ mod VesuRebalance {
       self._emergency_withdraw();
     }
 
-    fn emergency_escape(ref self: ContractState) {
-      let this = get_contract_address();
-      self.common.assert_emergency_actor_role();
-      self._emergency_withdraw();
-      let asset_bal = ERC20Helper::balanceOf(self.asset(), this);
-      ERC20Helper::strict_transfer_from(
-        self.asset(),
-        this,
-        self.get_settings().emergency_address,
-        asset_bal
-      );
-    }
-
-    fn emergency_withdraw_pool(ref self: ContractState, pool_id: felt252) {
+    fn emergency_withdraw_pool(ref self: ContractState, pool_index: u32) {
       self.common.assert_emergency_actor_role();
       let this = get_contract_address();
       let allowed_pools = self.get_allowed_pools();
-      let mut i = 0;
-      let mut v_token = *allowed_pools.at(i).v_token;
-      loop {
-        assert(i != allowed_pools.len(), 'invalid pool id passed');
-        if *allowed_pools.at(i).pool_id == pool_id {
-          v_token = *allowed_pools.at(i).v_token;
-          break;
-        }
-        i += 1;
-      };
+      let pool_info = *allowed_pools.at(pool_index);
+      let mut v_token = pool_info.v_token;
+
       let max_withdraw_vault = self._calculate_max_withdraw(v_token);
-      let max_withdraw_pool = self._calculate_max_withdraw_pool(pool_id, self.asset());
+      let max_withdraw_pool = self._calculate_max_withdraw_pool(pool_info.pool_id, self.asset());
+
       let withdraw_amount = if max_withdraw_vault <= max_withdraw_pool {
         max_withdraw_vault
       } else {
@@ -238,22 +224,14 @@ mod VesuRebalance {
       // perform rebalance
       self.common.assert_relayer_role();
       self.common.assert_not_paused();
-      let (yield_before_rebalance, _ ) = self.compute_yield();
+
       self._collect_fees();
       self._rebal_loop(actions);
-      let (yield_after_rebalance, total_amount) = self.compute_yield();
 
       // post rebalance validations
       let this = get_contract_address();
-      self._assert_max_weights(total_amount);
+      self._assert_max_weights();
       assert(ERC20Helper::balanceOf(self.asset(), this) == 0, Errors::UNUTILIZED_ASSET);
-
-      self.emit(
-        Rebalance {
-          yield_before: yield_before_rebalance,
-          yield_after: yield_after_rebalance
-        }
-      );
     }
 
     // @notice computes overall yeild across all allowed pools. the yield computation isnt exact, 
@@ -319,11 +297,44 @@ mod VesuRebalance {
       self.common.assert_governor_role();
       self._set_pool_settings(pools);
     }
+    
+    fn set_incentives_off(ref self: ContractState) {
+      self.common.assert_governor_role();
+      self.is_incentives_on.write(false);
+    }
+
+    fn harvest(
+      ref self: ContractState, 
+      rewardsContract: ContractAddress,
+      claim: Claim, 
+      proof: Span<felt252>, 
+      swapInfo: AvnuMultiRouteSwap
+    ) {
+      let vesuSettings = SNFStyleClaimSettings {
+        rewardsContract: rewardsContract,
+      };
+      let config = HarvestConfig {};
+      // just dummy config, not used
+      let snfSettings = SNFStyleClaimSettings {
+        rewardsContract: contract_address_const::<0>()
+      };
+
+      config.simple_harvest(
+        ref self,
+        vesuSettings,
+        claim,
+        proof,
+        snfSettings,
+        swapInfo,
+        IPriceOracleDispatcher {contract_address: self.vesu_settings.read().oracle}
+      );
+    }
   }
 
   #[generate_trait]
   pub impl InternalImpl of InternalTrait {
-    fn _assert_max_weights(self: @ContractState, total_amount: u256) {
+    fn _assert_max_weights(self: @ContractState) {
+      let total_amount = self.total_assets();
       let allowed_pools = self._get_pool_data();
       let mut i = 0;
       loop {
@@ -381,10 +392,13 @@ mod VesuRebalance {
       allowed_pools: Array<PoolProps>, 
      ) {
       // set pools
+      // @audit there is a risk of not being able to withdraw from certain pools if the pool info 
+      // is not updated correctly. Think there sholuld be a check to assert that, if a pool as funds,
+      // it should exist in both old and new pool list
       assert(allowed_pools.len() > 0, Errors::INVALID_POOL_LENGTH);
       let mut pools_str = self.allowed_pools.read();
       pools_str.clean();
-      pools_str.append_span(allowed_pools.span()).unwrap(); // @audit add a unwrap here ig
+      pools_str.append_span(allowed_pools.span()).unwrap();
       assert(self.allowed_pools.read().len() == allowed_pools.len(), Errors::INVALID_POOL_LENGTH);
     }
 
@@ -420,7 +434,7 @@ mod VesuRebalance {
       let this = get_contract_address();
       let prev_index = self.previous_index.read();
       let assets = self.total_assets(); // @audit use total_assets() instead
-      // @audit u need to multiple numerator with 10**18 here (Solution implemented using DEFAULT_INDEX)
+
       let total_supply = self.erc20.total_supply();
       let curr_index = (assets * DEFAULT_INDEX.into()) / total_supply;
       if curr_index < prev_index.into() {
@@ -434,11 +448,6 @@ mod VesuRebalance {
       if fee == 0 { // no point of transfer logic if fee = 0
         return;
       }
-      // @audit Fee can be zero if fee setting is 0
-      // @audit Fee can be zero if someone doesnt multiple
-      // transactions in same block, where index did not
-      // enough time to change
-      // assert(fee > 0, 'fee cannot be zero');
 
       let mut fee_loop = fee; 
       let allowed_pools = self._get_pool_data();
@@ -495,6 +504,7 @@ mod VesuRebalance {
       IERC4626Dispatcher {contract_address: v_token}.convert_to_assets(v_token_bal)
     }
 
+    // Based on utilisation, how much can we withraw
     fn _calculate_max_withdraw_pool(self: @ContractState, pool_id: felt252, asset: ContractAddress) -> u256 {
       let singleton_disp = self.vesu_settings.read().singleton;
       let (asset_config, _) = singleton_disp.asset_config(
@@ -677,7 +687,8 @@ mod VesuRebalance {
     }
 
     fn total_assets(self: @ContractState) -> u256 {
-      self._compute_assets()
+      let bal = ERC20Helper::balanceOf(self.asset(), get_contract_address());
+      self._compute_assets() + bal
     }
 
     fn withdraw(
@@ -743,10 +754,7 @@ mod VesuRebalance {
       let mut contract_state = self.get_contract_mut();
       let caller = get_caller_address();
       contract_state.common.assert_not_paused();
-      let (additional_shares, last_block, pending_round_points) = 
-      contract_state.reward_share.get_additional_shares(
-        caller
-      );
+
       let pool_ids_array = contract_state._get_pool_data();
       let this = get_contract_address();
       // deposit normally 
@@ -756,14 +764,23 @@ mod VesuRebalance {
       IERC4626Dispatcher {contract_address: v_token}.deposit(assets, this);
       contract_state._collect_fees();
       let user_shares = contract_state._get_user_shares(Feature::DEPOSIT, caller, shares);
-      contract_state.reward_share.update_user_rewards(
-        caller,
-        user_shares.try_into().unwrap(),
-        additional_shares,
-        last_block,
-        pending_round_points,
-        contract_state.erc20.total_supply().try_into().unwrap()
-      );
+
+      // update user rewards
+      if (contract_state.is_incentives_on.read()) {
+        let (additional_shares, last_block, pending_round_points) = 
+        contract_state.reward_share.get_additional_shares(
+          caller
+        );
+        contract_state.reward_share.update_user_rewards(
+          caller,
+          user_shares.try_into().unwrap() + additional_shares.try_into().unwrap(),
+          additional_shares,
+          last_block,
+          pending_round_points,
+          contract_state.erc20.total_supply().try_into().unwrap()
+        );
+        // @audit_vt need to mint additional shares on user
+      }
     }
 
     /// @notice Handles pre-withdrawal operations to ensure liquidity availability.
@@ -790,6 +807,7 @@ mod VesuRebalance {
       let default_pool_info = pool_ids_array.at(default_id.into());
 
       //case 1: if amount exists in default pool 
+      // @audit if default pool is paused/shutdown mode, skip this pool
       let default_pool_withdrawn = contract_state._perform_withdraw_max_possible(
         *default_pool_info.pool_id,
         *default_pool_info.v_token,
@@ -810,6 +828,9 @@ mod VesuRebalance {
         if i == default_id.into() {
           continue;
         }
+        
+        // @audit if pool is paused/shutdown mode, skip this pool
+
         let withdrawn_amount = contract_state._perform_withdraw_max_possible(
           *pool_ids_array.at(i).pool_id,
           *pool_ids_array.at(i).v_token,
@@ -823,15 +844,44 @@ mod VesuRebalance {
       };
 
       assert(remaining_amount == 0, 'remaining amount should be zero');
-      let user_shares = contract_state._get_user_shares(Feature::WITHDRAW, caller, shares);
-      contract_state.reward_share.update_user_rewards(
-        caller,
-        user_shares.try_into().unwrap(),
-        additional_shares,
-        last_block,
-        pending_round_points,
-        contract_state.erc20.total_supply().try_into().unwrap()
-      );
+
+      if (contract_state.is_incentives_on.read()) {
+        let user_shares = contract_state._get_user_shares(Feature::WITHDRAW, caller, shares);
+        contract_state.reward_share.update_user_rewards(
+          caller,
+          user_shares.try_into().unwrap(),
+          additional_shares,
+          last_block,
+          pending_round_points,
+          contract_state.erc20.total_supply().try_into().unwrap()
+        );
+
+        // @audit_vt need to mint additional shares on user
+      }
+    }
+  }
+  
+  /// hooks defining before and after actions for the harvest function
+  impl HarvestHooksImpl of HarvestHooksTrait<ContractState> {
+    fn before_update(ref self: ContractState) -> HarvestBeforeHookResult {
+      self._collect_fees();
+      HarvestBeforeHookResult { baseToken: self.asset() }
+    }
+
+    fn after_update(ref self: ContractState, token: ContractAddress, amount: u256) {
+      let fee = (amount * self.settings.fee_percent.read().into()) / 10000;
+      if (fee > 0) {
+        let fee_receiver = self.settings.fee_receiver.read();
+        ERC20Helper::transfer(token, fee_receiver, fee);
+      }
+      let amt = amount - fee;
+
+      // deposit normally 
+      let pool_ids_array = self._get_pool_data();
+      let default_pool_index = self.settings.default_pool_index.read();
+      let v_token = *pool_ids_array.at(default_pool_index.into()).v_token;
+      ERC20Helper::approve(self.asset(), v_token, amt);
+      IERC4626Dispatcher {contract_address: v_token}.deposit(amt, get_contract_address());
     }
   }
 }

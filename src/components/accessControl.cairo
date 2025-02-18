@@ -1,12 +1,12 @@
 #[starknet::contract]
 pub mod AccessControl {
     use AccessControlComponent::InternalTrait;
-use starknet::{ContractAddress, get_caller_address, ClassHash};
+    use starknet::{ContractAddress, ClassHash};
     use openzeppelin::access::accesscontrol::AccessControlComponent;
-    use openzeppelin::access::accesscontrol::interface::IAccessControl;
     use openzeppelin::upgrades::upgradeable::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
     use openzeppelin::introspection::src5::SRC5Component;
+    use core::num::traits::Zero;
 
     component!(path: AccessControlComponent, storage: access_control, event: AccessControlEvent);
     component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
@@ -14,6 +14,9 @@ use starknet::{ContractAddress, get_caller_address, ClassHash};
 
     impl AccessControlInternalImpl = AccessControlComponent::InternalImpl<ContractState>;
     impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
+
+    #[abi(embed_v0)]
+    impl AccessControlImpl = AccessControlComponent::AccessControlImpl<ContractState>;
 
     #[storage]
     struct Storage {
@@ -59,42 +62,23 @@ use starknet::{ContractAddress, get_caller_address, ClassHash};
         self.access_control.set_role_admin(Roles::GOVERNOR, Roles::DEFAULT_ADMIN_ROLE);
         self.access_control.set_role_admin(Roles::RELAYER, Roles::DEFAULT_ADMIN_ROLE);
         self.access_control.set_role_admin(Roles::EMERGENCY_ACTOR, Roles::DEFAULT_ADMIN_ROLE);
+
         // grant roles to each address
+        assert(governor_address.is_non_zero(), 'Governor address cannot be zero');
+        assert(relayer_address.is_non_zero(), 'Relayer address cannot be zero');
+        assert(emergency_address.is_non_zero(), 'Emgncy address cannot be zero');
         self.access_control._grant_role(Roles::GOVERNOR, governor_address);
         self.access_control._grant_role(Roles::RELAYER, relayer_address);
         self.access_control._grant_role(Roles::EMERGENCY_ACTOR, emergency_address);
     }
 
     #[abi(embed_v0)]
-    impl AccessControlExternalImpl of IAccessControl<ContractState> {
-        fn has_role(self: @ContractState, role: felt252, account: ContractAddress) -> bool {
-            self.access_control.has_role(role, account)
-        }
-
-        fn get_role_admin(self: @ContractState, role: felt252) -> felt252 {
-            self.access_control.get_role_admin(role)
-        }
-
-        fn grant_role(ref self: ContractState, role: felt252, account: ContractAddress) {
-            self.access_control.assert_only_role(Roles::DEFAULT_ADMIN_ROLE);
-            self.access_control.grant_role(role, account);
-        }
-
-        fn revoke_role(ref self: ContractState, role: felt252, account: ContractAddress) {
-            self.access_control.assert_only_role(Roles::DEFAULT_ADMIN_ROLE);
-            self.access_control.revoke_role(role, account);
-        }
-
-        fn renounce_role(ref self: ContractState, role: felt252, account: ContractAddress) {
-            self.access_control.assert_only_role(Roles::DEFAULT_ADMIN_ROLE);
-            self.access_control.renounce_role(role, account);
-        }
-    }
-
-    #[abi(embed_v0)]
     impl UpgradeableImpl of IUpgradeable<ContractState> {
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
             self.access_control.assert_only_role(Roles::DEFAULT_ADMIN_ROLE);
+
+            // @audit assert the new clash hash support access control interface
+            // probably do a syscall to the new clash hash to check if it implements the access control interface
             self.upgradeable.upgrade(new_class_hash);
         }
     }

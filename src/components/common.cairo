@@ -8,9 +8,6 @@ pub mod CommonComp {
         InternalTrait as PausableInternalTrait, PausableImpl
     };
     use openzeppelin::security::reentrancyguard::ReentrancyGuardComponent;
-    use openzeppelin::security::reentrancyguard::ReentrancyGuardComponent::{
-        InternalTrait as ReentrancyGuardInternalTrait,
-    };
     use openzeppelin::access::accesscontrol::interface::{IAccessControlDispatcher, IAccessControlDispatcherTrait};
     use strkfarm_contracts::interfaces::common::ICommon;
     use strkfarm_contracts::components::accessControl::AccessControl::Roles;
@@ -39,13 +36,13 @@ pub mod CommonComp {
         }
 
         fn pause(ref self: ComponentState<TContractState>) {
-            self.assert_admin_role();
+            self.assert_emergency_actor_role();
             let mut pausable = get_dep_component_mut!(ref self, Pausable);
             pausable.pause();
         }
 
         fn unpause(ref self: ComponentState<TContractState>) {
-            self.assert_admin_role();
+            self.assert_emergency_actor_role();
             let mut pausable = get_dep_component_mut!(ref self, Pausable);
             pausable.unpause();
         }
@@ -75,30 +72,30 @@ pub mod CommonComp {
         }
 
           // Assert that the caller has a specific role
-        fn assert_has_role(self: @ComponentState<TContractState>, role: felt252) {
+        fn has_role(self: @ComponentState<TContractState>, role: felt252) -> bool {
             let access_control = self.access_control.read();
             IAccessControlDispatcher {contract_address: access_control}
-            .has_role(role, get_caller_address());
+            .has_role(role, get_caller_address())
         }
 
         // Assert that the caller is the DEFAULT_ADMIN_ROLE
         fn assert_admin_role(self: @ComponentState<TContractState>) {
-            self.assert_has_role(Roles::DEFAULT_ADMIN_ROLE);
+            assert(self.has_role(Roles::DEFAULT_ADMIN_ROLE), 'Access: Missing admin role');
         }
 
         // Assert that the caller is the GOVERNOR
         fn assert_governor_role(self: @ComponentState<TContractState>) {
-            self.assert_has_role(Roles::GOVERNOR);
+            assert(self.has_role(Roles::GOVERNOR), 'Access: Missing governor role');
         }
 
         // Assert that the caller is the EMERGENCY_ACTOR
         fn assert_emergency_actor_role(self: @ComponentState<TContractState>) {
-            self.assert_has_role(Roles::EMERGENCY_ACTOR);
+            assert(self.has_role(Roles::EMERGENCY_ACTOR), 'Access: Missing EA role');
         }
 
         // Assert that the caller is the RELAYER
         fn assert_relayer_role(self: @ComponentState<TContractState>) {
-            self.assert_has_role(Roles::RELAYER);
+            assert(self.has_role(Roles::RELAYER), 'Access: Missing relayer role');
         }
     }
 }
