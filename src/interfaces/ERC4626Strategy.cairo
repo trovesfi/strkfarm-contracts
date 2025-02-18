@@ -1,7 +1,6 @@
 use starknet::{ContractAddress, ClassHash};
 use strkfarm_contracts::interfaces::IEkuboDistributor::{Claim};
 use strkfarm_contracts::components::swap::{AvnuMultiRouteSwap};
-use strkfarm_contracts::components::zkLend::zkLendStruct;
 
 #[derive(Drop, Copy, Serde, starknet::Event, starknet::Store)]
 pub struct Settings {
@@ -22,7 +21,7 @@ pub trait IStrategy<TContractState> {
     fn harvest(
         ref self: TContractState, claim: Claim, proof: Span<felt252>, swapInfo: AvnuMultiRouteSwap
     );
-    fn set_settings(ref self: TContractState, settings: Settings, lend_settings: zkLendStruct);
+    // fn set_settings(ref self: TContractState, settings: Settings, lend_settings: zkLendStruct);
 
     fn upgrade(ref self: TContractState, class_hash: ClassHash);
 

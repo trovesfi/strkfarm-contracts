@@ -19,7 +19,6 @@ mod components {
     pub mod erc4626;
     pub mod common;
     pub mod vesu;
-    pub mod zkLend;
     pub mod accessControl;
 }
 
@@ -35,7 +34,6 @@ mod interfaces {
     pub mod IEkuboPositionsNFT;
     pub mod IEkuboDistributor;
     pub mod ERC4626Strategy;
-    pub mod zkLend;
 }
 
 mod strategies {
