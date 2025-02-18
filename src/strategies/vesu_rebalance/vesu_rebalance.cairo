@@ -1,12 +1,16 @@
 #[starknet::contract]
 mod VesuRebalance {
-  use starknet::{ContractAddress, get_contract_address};
+  use starknet::{ContractAddress, get_contract_address, get_caller_address};
   use strkfarm_contracts::helpers::ERC20Helper;
   use strkfarm_contracts::components::common::CommonComp;
   use strkfarm_contracts::components::vesu::{vesuStruct, vesuToken, vesuSettingsImpl};
   use strkfarm_contracts::interfaces::IVesu::{
     IStonDispatcher, IStonDispatcherTrait,
     IVesuExtensionDispatcher, IVesuExtensionDispatcherTrait
+  };
+  use strkfarm_contracts::components::harvester::reward_shares::{RewardShareComponent, IRewardShare};
+  use strkfarm_contracts::components::harvester::reward_shares::RewardShareComponent::{
+      InternalTrait as RewardShareInternalImpl
   };
   use strkfarm_contracts::helpers::pow;
   use strkfarm_contracts::interfaces::IERC4626::{IERC4626, IERC4626Dispatcher, IERC4626DispatcherTrait};
@@ -19,11 +23,13 @@ mod VesuRebalance {
     ERC20Component,
     ERC20HooksEmptyImpl
   };
+  use openzeppelin::token::erc20::interface::IERC20;
   use strkfarm_contracts::components::erc4626::{ERC4626Component};
   use strkfarm_contracts::components::erc4626::ERC4626Component::{FeeConfigTrait, LimitConfigTrait, ERC4626HooksTrait, ImmutableConfig};
   use alexandria_storage::list::{List, ListTrait};
 
   component!(path: ERC4626Component, storage: erc4626, event: ERC4626Event);
+  component!(path: RewardShareComponent, storage: reward_share, event: RewardShareEvent);
   component!(path: ERC20Component, storage: erc20, event: ERC20Event);
   component!(path: SRC5Component, storage: src5, event: SRC5Event);
   component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
@@ -32,18 +38,11 @@ mod VesuRebalance {
   component!(path: PausableComponent, storage: pausable, event: PausableEvent);
   component!(path: CommonComp, storage: common, event: CommonCompEvent);
 
-  // #[abi(embed_v0)]
-  // impl ERC4626Impl = ERC4626Component::ERC4626Impl<ContractState>;
-  // #[abi(embed_v0)]
-  // impl ERC4626DefaultNoFees = ERC4626Component::FeeConfigTrait<ContractState>;
-  // #[abi(embed_v0)]
-  // impl ERC4626DefaultLimits = ERC4626Component::LimitConfigTrait<ContractState>;
-  #[abi(embed_v0)]
-  impl ERC20Impl = ERC20Component::ERC20Impl<ContractState>;
   #[abi(embed_v0)]
   impl CommonCompImpl = CommonComp::CommonImpl<ContractState>;
 
   impl CommonInternalImpl = CommonComp::InternalImpl<ContractState>;
+  impl RewardShare = RewardShareComponent::InternalImpl<ContractState>;
   impl ERC4626InternalImpl = ERC4626Component::InternalImpl<ContractState>;
   impl ERC20InternalImpl = ERC20Component::InternalImpl<ContractState>;
   impl ReentrancyGuardInternalImpl = ReentrancyGuardComponent::InternalImpl<ContractState>;
@@ -64,6 +63,8 @@ mod VesuRebalance {
   struct Storage {
     #[substorage(v0)]
     reng: ReentrancyGuardComponent::Storage,
+    #[substorage(v0)]
+    reward_share: RewardShareComponent::Storage,
     #[substorage(v0)] 
     erc4626: ERC4626Component::Storage,
     #[substorage(v0)]
@@ -82,7 +83,6 @@ mod VesuRebalance {
     allowed_pools: List<PoolProps>,
     settings: Settings,
     previous_index: u128,
-    borrow_settings: BorrowSettings,
     vesu_settings: vesuStruct,
   }
 
@@ -93,6 +93,8 @@ mod VesuRebalance {
     ReentrancyGuardEvent: ReentrancyGuardComponent::Event,
     #[flat]
     ERC4626Event: ERC4626Component::Event,
+    #[flat]
+    RewardShareEvent: RewardShareComponent::Event,
     #[flat]
     ERC20Event: ERC20Component::Event,
     #[flat]
@@ -128,22 +130,22 @@ mod VesuRebalance {
   fn constructor(
     ref self: ContractState,
     asset: ContractAddress,
-    owner: ContractAddress,
+    access_control: ContractAddress,
     allowed_pools: Array<PoolProps>,
     settings: Settings,
     borrow_settings: BorrowSettings,
     vesu_settings: vesuStruct,
   ) {
     self.erc4626.initializer(asset);
-    self.common.initializer(owner);   
+    self.common.initializer(access_control);   
     self.set_allowed_pools(allowed_pools);
     // @audit modified constructor to directly take Settings struct
     self.set_settings(settings);
-    self.set_borrow_settings(borrow_settings);
     self.vesu_settings.write(vesu_settings);
-
     // default index 10**18 (i.e. 1)
     self.previous_index.write(DEFAULT_INDEX);
+    // considering owner deployed the access control contract 
+    // already has the DEFAULT_ADMIN_ROLE
   }
 
   //task at hand 
@@ -158,6 +160,8 @@ mod VesuRebalance {
     /// @param actions Array of actions to be performed for rebalancing
     fn rebalance(ref self: ContractState, actions: Array<Action>) {
       // perform rebalance
+      self.common.assert_admin_role();
+      self.common.assert_not_paused();
       let (yield_before_rebalance, _ ) = self.compute_yield();
       self._collect_fees();
       self._rebal_loop(actions);
@@ -167,7 +171,6 @@ mod VesuRebalance {
       let this = get_contract_address();
       assert(yield_after_rebalance > yield_before_rebalance, Errors::INVALID_YIELD);
       assert(ERC20Helper::balanceOf(self.asset(), this) == 0, Errors::UNUTILIZED_ASSET);
-      self._assert_hf();
       self._assert_max_weights(total_amount);
 
       self.emit(
@@ -178,7 +181,83 @@ mod VesuRebalance {
       );
     }
 
-    // @notice computes overall yeild across all allowed pools
+    fn emergency_withdraw(ref self: ContractState) {
+      self.common.assert_emergency_actor_role();
+      self._emergency_withdraw();
+    }
+
+    fn emergency_escape(ref self: ContractState) {
+      let this = get_contract_address();
+      self.common.assert_emergency_actor_role();
+      self._emergency_withdraw();
+      let asset_bal = ERC20Helper::balanceOf(self.asset(), this);
+      ERC20Helper::strict_transfer_from(
+        self.asset(),
+        this,
+        self.get_settings().emergency_address,
+        asset_bal
+      );
+    }
+
+    fn emergency_withdraw_pool(ref self: ContractState, pool_id: felt252) {
+      self.common.assert_emergency_actor_role();
+      let this = get_contract_address();
+      let allowed_pools = self.get_allowed_pools();
+      let mut i = 0;
+      let mut v_token = *allowed_pools.at(i).v_token;
+      loop {
+        assert(i != allowed_pools.len(), 'invalid pool id passed');
+        if *allowed_pools.at(i).pool_id == pool_id {
+          v_token = *allowed_pools.at(i).v_token;
+          break;
+        }
+        i += 1;
+      };
+      let max_withdraw_vault = self._calculate_max_withdraw(v_token);
+      let max_withdraw_pool = self._calculate_max_withdraw_pool(pool_id, self.asset());
+      let withdraw_amount = if max_withdraw_vault <= max_withdraw_pool {
+        max_withdraw_vault
+      } else {
+        max_withdraw_pool
+      };
+      if (withdraw_amount == 0) {
+        return;
+      }
+      IERC4626Dispatcher {contract_address: v_token}.withdraw(
+        withdraw_amount,
+        this,
+        this
+      );
+    }
+
+    /// @notice Rebalances users position in vesu to balance weights
+    /// @dev This function computes the yield before and after rebalancing, collects fees, 
+    /// executes rebalancing actions, and performs post-rebalance validations.
+    /// @param actions Array of actions to be performed for rebalancing
+    fn rebalance_weights(ref self: ContractState, actions: Array<Action>) {
+      // perform rebalance
+      self.common.assert_relayer_role();
+      self.common.assert_not_paused();
+      let (yield_before_rebalance, _ ) = self.compute_yield();
+      self._collect_fees();
+      self._rebal_loop(actions);
+      let (yield_after_rebalance, total_amount) = self.compute_yield();
+
+      // post rebalance validations
+      let this = get_contract_address();
+      self._assert_max_weights(total_amount);
+      assert(ERC20Helper::balanceOf(self.asset(), this) == 0, Errors::UNUTILIZED_ASSET);
+
+      self.emit(
+        Rebalance {
+          yield_before: yield_before_rebalance,
+          yield_after: yield_after_rebalance
+        }
+      );
+    }
+
+    // @notice computes overall yeild across all allowed pools. the yield computation isnt exact, 
+    // but more like a way to check if the yield change is positive or not. So, its computed only to calculate the yield effect
     // @dev Iterates through allowed pools, calculates yield per pool, and aggregates.
     // @return (u256, u256) - The weighted average yield and the total amount across pools. 
     fn compute_yield(self: @ContractState) -> (u256, u256) {
@@ -198,9 +277,6 @@ mod VesuRebalance {
         i += 1;
       };
       
-      assert(self.borrow_settings.read().is_borrowing_allowed == false, Errors::BORROWING_ENABLED);
-      // handle borrow yeild 
-      
       ((yield_sum / amount_sum), amount_sum)
     }
 
@@ -218,13 +294,6 @@ mod VesuRebalance {
       self._get_pool_data()
     }
 
-    /// @notice Retrieves the borrow settings of the contract.
-    /// @dev Reads and returns the borrow settings stored in the contract state.
-    /// @return borrow_settings The current borrow configuration settings.
-    fn get_borrow_settings(self: @ContractState) -> BorrowSettings {
-      self.borrow_settings.read()
-    }
-
     /// @notice Retrieves the previous index of the contract.
     /// @dev Reads and returns the previous index stored in the contract state.
     /// @return previous_index The current borrow configuration settings.
@@ -233,30 +302,22 @@ mod VesuRebalance {
     }
 
     /// @notice Updates the contract settings.
-    /// @dev Only the contract owner can call this function to modify the settings.
+    /// @dev Only addresses with GOVERNOR role can call this function to modify the settings.
     /// @param settings The new settings to be stored in the contract.
     fn set_settings(
       ref self: ContractState, 
       settings: Settings
      ) {
-      self.common.assert_only_owner();
+      self.common.assert_governor_role();
       self.settings.write(settings);
     }
 
     /// @notice Updates the contract settings.
-    /// @dev Only the contract owner can call this function to modify allowed pools.
+    /// @dev Only addresses with GOVERNOR role can call this function to modify allowed pools.
     /// @param pools The new allowed pools to be stored in the contract.
     fn set_allowed_pools(ref self: ContractState, pools: Array<PoolProps>) {
-      self.common.assert_only_owner();
+      self.common.assert_governor_role();
       self._set_pool_settings(pools);
-    }
-
-    /// @notice Updates the contract's borrow settings.
-    /// @dev Only the contract owner can call this function to modify the borrow settings.
-    /// @param borrow_settings The new borrow settings to be stored in the contract.
-    fn set_borrow_settings(ref self: ContractState, borrow_settings: BorrowSettings) {
-      self.common.assert_only_owner();
-      self.borrow_settings.write(borrow_settings);
     }
   }
 
@@ -275,10 +336,6 @@ mod VesuRebalance {
         assert(asset_basis <= pool.max_weight, Errors::MAX_WEIGHT_EXCEEDED);
         i += 1;
       }
-    }
-
-    fn _assert_hf(self: @ContractState) {
-      //have some doubts here
     }
 
     fn _calculate_amount_in_pool(self: @ContractState, v_token: ContractAddress) -> u256 {
@@ -453,11 +510,6 @@ mod VesuRebalance {
     fn _action(ref self: ContractState, action: Action) {
       let this = get_contract_address();
       let token = self.asset();
-      // if borrowing is not enabled, token is always asset()
-      if (!self.borrow_settings.read().is_borrowing_allowed) {
-        assert(action.token == token, 'token should be asset');
-      }
-
       let allowed_pools = self.get_allowed_pools();
       let mut i = 0;
       let mut v_token = allowed_pools.at(i).v_token;
@@ -517,6 +569,47 @@ mod VesuRebalance {
       );
 
       return withdraw_amount;
+    }
+
+    fn _get_user_shares(self: @ContractState, action_type: Feature, caller: ContractAddress, shares: u256) -> u256 {
+      let this = get_contract_address();
+      let bal = ERC20Helper::balanceOf(this, caller);
+      match action_type {
+        Feature::DEPOSIT => {
+          return bal + shares;
+        },
+        Feature::WITHDRAW => {
+          return bal - shares;
+        }
+      }
+    }
+
+    fn _emergency_withdraw(ref self: ContractState) {
+      let this = get_contract_address();
+      let allowed_pools = self.get_allowed_pools();
+      let mut i = 0;
+      loop {
+        if(i == allowed_pools.len()) {
+          break;
+        }
+        let pool = *allowed_pools.at(i);
+        let max_withdraw_vault = self._calculate_max_withdraw(pool.v_token);
+        let max_withdraw_pool = self._calculate_max_withdraw_pool(pool.pool_id, self.asset());
+        let withdraw_amount = if max_withdraw_vault <= max_withdraw_pool {
+          max_withdraw_vault
+        } else {
+          max_withdraw_pool
+        };
+        if (withdraw_amount == 0) {
+          continue;
+        }
+        IERC4626Dispatcher {contract_address: pool.v_token}.withdraw(
+          withdraw_amount,
+          this,
+          this
+        );
+        i += 1;
+      }
     }
   }
 
@@ -597,6 +690,34 @@ mod VesuRebalance {
     }
   }
 
+  #[abi(embed_v0)]
+  impl VesuERC20Impl of IERC20<ContractState> {
+    fn total_supply(self: @ContractState) -> u256 {
+      let unminted_shares = self.reward_share.get_total_unminted_shares();
+      let total_supply: u256 = self.erc20.total_supply() + unminted_shares.try_into().unwrap();
+
+      total_supply
+    }
+
+    fn balance_of(self: @ContractState, account: ContractAddress) -> u256 {
+      self.erc20.balance_of(account)
+    }
+    fn allowance(self: @ContractState, owner: ContractAddress, spender: ContractAddress) -> u256 {
+      self.erc20.allowance(owner, spender)
+    }
+    fn transfer(ref self: ContractState, recipient: ContractAddress, amount: u256) -> bool {
+      self.erc20.transfer(recipient, amount)
+    }
+    fn transfer_from(
+        ref self: ContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256,
+    ) -> bool {
+      self.erc20.transfer_from(sender, recipient, amount)
+    }
+    fn approve(ref self: ContractState, spender: ContractAddress, amount: u256) -> bool {
+      self.erc20.approve(spender, amount)
+    }
+  }
+
   impl ERC4626DefaultNoFees of ERC4626Component::FeeConfigTrait<ContractState> {}
 
   impl ERC4626DefaultLimits<
@@ -620,6 +741,12 @@ mod VesuRebalance {
       shares: u256,
      ) {
       let mut contract_state = self.get_contract_mut();
+      let caller = get_caller_address();
+      contract_state.common.assert_not_paused();
+      let (additional_shares, last_block, pending_round_points) = 
+      contract_state.reward_share.get_additional_shares(
+        caller
+      );
       let pool_ids_array = contract_state._get_pool_data();
       let this = get_contract_address();
       // deposit normally 
@@ -628,6 +755,15 @@ mod VesuRebalance {
       ERC20Helper::approve(self.asset(), v_token, assets);
       IERC4626Dispatcher {contract_address: v_token}.deposit(assets, this);
       contract_state._collect_fees();
+      let user_shares = contract_state._get_user_shares(Feature::DEPOSIT, caller, shares);
+      contract_state.reward_share.update_user_rewards(
+        caller,
+        user_shares.try_into().unwrap(),
+        additional_shares,
+        last_block,
+        pending_round_points,
+        contract_state.erc20.total_supply().try_into().unwrap()
+      );
     }
 
     /// @notice Handles pre-withdrawal operations to ensure liquidity availability.
@@ -642,6 +778,12 @@ mod VesuRebalance {
       shares: u256
      ) {
       let mut contract_state = self.get_contract_mut();
+      let caller = get_caller_address();
+      contract_state.common.assert_not_paused();
+      let (additional_shares, last_block, pending_round_points) = 
+      contract_state.reward_share.get_additional_shares(
+        caller
+      );
       contract_state._collect_fees();
       let mut pool_ids_array = contract_state._get_pool_data();
       let default_id = contract_state.settings.read().default_pool_index;
@@ -654,14 +796,9 @@ mod VesuRebalance {
         assets
       );
 
-
       if (default_pool_withdrawn == assets) {
         return;
       }
-      
-      // till we impl a proper logic
-      let borrow_settings = contract_state.borrow_settings.read();
-      assert(!borrow_settings.is_borrowing_allowed, 'borrowing is enabled');
 
       // case 2: withdraw remaining from other pools
       let mut remaining_amount = assets - default_pool_withdrawn;
@@ -686,6 +823,15 @@ mod VesuRebalance {
       };
 
       assert(remaining_amount == 0, 'remaining amount should be zero');
+      let user_shares = contract_state._get_user_shares(Feature::WITHDRAW, caller, shares);
+      contract_state.reward_share.update_user_rewards(
+        caller,
+        user_shares.try_into().unwrap(),
+        additional_shares,
+        last_block,
+        pending_round_points,
+        contract_state.erc20.total_supply().try_into().unwrap()
+      );
     }
   }
 }

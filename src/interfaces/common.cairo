@@ -6,9 +6,4 @@ pub trait ICommon<TState> {
     fn pause(ref self: TState);
     fn unpause(ref self: TState);
     fn is_paused(self: @TState) -> bool;
-
-    // ownable stuff
-    fn owner(self: @TState) -> ContractAddress;
-    fn transfer_ownership(ref self: TState, new_owner: ContractAddress);
-    fn renounce_ownership(ref self: TState);
 }

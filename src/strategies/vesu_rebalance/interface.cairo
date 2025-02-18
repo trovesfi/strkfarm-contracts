@@ -35,12 +35,17 @@ pub struct BorrowSettings {
 pub struct Settings {
   pub default_pool_index: u8,
   pub fee_percent: u32,
-  pub fee_receiver: ContractAddress
+  pub fee_receiver: ContractAddress,
+  pub emergency_address: ContractAddress
 }
 
 #[starknet::interface]
 pub trait IVesuRebal<TContractState> {
   fn rebalance(ref self: TContractState, actions: Array<Action>);
+  fn rebalance_weights(ref self: TContractState, actions: Array<Action>);
+  fn emergency_withdraw(ref self: TContractState);
+  fn emergency_escape(ref self: TContractState);
+  fn emergency_withdraw_pool(ref self: TContractState, pool_id: felt252);
   fn compute_yield(self: @TContractState) -> (u256, u256);
   
   // =================
@@ -49,12 +54,10 @@ pub trait IVesuRebal<TContractState> {
   // setters
   fn set_settings(ref self: TContractState, settings: Settings);
   fn set_allowed_pools(ref self: TContractState, pools: Array<PoolProps>);
-  fn set_borrow_settings(ref self: TContractState, borrow_settings: BorrowSettings);
 
   // getters
   fn get_settings(self: @TContractState) -> Settings;
   fn get_allowed_pools(self: @TContractState) -> Array<PoolProps>;
-  fn get_borrow_settings(self: @TContractState) -> BorrowSettings;
   fn get_previous_index(self: @TContractState) -> u128;
   // @audit add setters for
   // set_allowed_pools(Array<PoolProps>);

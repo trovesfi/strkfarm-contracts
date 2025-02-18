@@ -10,8 +10,7 @@ pub mod ERC4626Component {
     use openzeppelin::token::erc20::ERC20Component::InternalImpl as ERC20InternalImpl;
     use openzeppelin::token::erc20::ERC20Component;
     use strkfarm_contracts::interfaces::IERC4626::{IERC4626, IERC4626Dispatcher, IERC4626DispatcherTrait};
-    use openzeppelin::token::erc20::interface::{IERC20, IERC20Metadata};
-    use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use openzeppelin::token::erc20::interface::{IERC20, IERC20Dispatcher, IERC20DispatcherTrait, IERC20Metadata};
     use strkfarm_contracts::helpers::Math::{Rounding, u256_mul_div, power};
     use starknet::ContractAddress;
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
@@ -463,11 +462,12 @@ pub mod ERC4626Component {
         fn _convert_to_shares(
             self: @ComponentState<TContractState>, assets: u256, rounding: Rounding
         ) -> u256 {
-            let mut erc20_component = get_dep_component!(self, ERC20);
-            let total_supply = erc20_component.total_supply();
+            let this = starknet::get_contract_address();
+            let mut erc20_disp = IERC20Dispatcher {contract_address: this};
+            let total_supply = erc20_disp.total_supply();
 
             // allows to call the overriden impl of the contract
-            let disp = IERC4626Dispatcher { contract_address: starknet::get_contract_address() };
+            let disp = IERC4626Dispatcher { contract_address: this };
 
             u256_mul_div(
                 assets,
@@ -482,11 +482,12 @@ pub mod ERC4626Component {
         fn _convert_to_assets(
             self: @ComponentState<TContractState>, shares: u256, rounding: Rounding
         ) -> u256 {
-            let mut erc20_component = get_dep_component!(self, ERC20);
-            let total_supply = erc20_component.total_supply();
+            let this = starknet::get_contract_address();
+            let mut erc20_disp = IERC20Dispatcher {contract_address: this};
+            let total_supply = erc20_disp.total_supply();
 
             // allows to call the overriden impl of the contract
-            let disp = IERC4626Dispatcher { contract_address: starknet::get_contract_address() };
+            let disp = IERC4626Dispatcher { contract_address: this };
 
             u256_mul_div(
                 shares,

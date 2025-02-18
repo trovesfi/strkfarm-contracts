@@ -166,7 +166,7 @@ mod ConcLiquidityVault {
     ref self: ContractState,
     name: ByteArray,
     symbol: ByteArray,
-    owner: ContractAddress,
+    access_control: ContractAddress,
     ekubo_positions_contract: ContractAddress,
     bounds_settings: Bounds,
     pool_key: PoolKey,
@@ -176,7 +176,7 @@ mod ConcLiquidityVault {
     fee_settings: FeeSettings,
   ) {
     self.erc20.initializer(name, symbol);
-    self.common.initializer(owner);
+    self.common.initializer(access_control);
     self.ekubo_positions_contract.write(
       IEkuboDispatcher { contract_address: ekubo_positions_contract }
     );
@@ -439,7 +439,7 @@ mod ConcLiquidityVault {
       curr_position
     }
 
-        /// @notice Retrieves the current settings of the contract.
+    /// @notice Retrieves the current settings of the contract.
     /// @dev This function reads various contract settings including fee settings, bounds, pool key, and oracle.
     /// @return ClSettings Struct containing the contract's current settings.
     fn get_settings(self: @ContractState) -> ClSettings {
@@ -459,7 +459,7 @@ mod ConcLiquidityVault {
   /// @dev Only the contract owner can call this function to modify fee settings.
   /// @param fee_settings The new fee settings to be applied.
   fn set_settings(ref self: ContractState, fee_settings: FeeSettings) {
-      self.common.assert_only_owner();
+      self.common.assert_governor_role();
       self.fee_settings.write(fee_settings);
       self.emit(fee_settings);
   }
@@ -474,7 +474,7 @@ mod ConcLiquidityVault {
       new_bounds: Bounds,
       swap_params: AvnuMultiRouteSwap
   ) {
-      self.common.assert_only_owner();
+      self.common.assert_relayer_role();
       let tick_curr = self.get_pool_price().tick;
       assert(new_bounds.lower <= tick_curr, 'invalid lower bound');
       assert(new_bounds.upper >= tick_curr, 'invalid upper bound');

@@ -20,6 +20,7 @@ mod components {
     pub mod common;
     pub mod vesu;
     pub mod zkLend;
+    pub mod accessControl;
 }
 
 mod interfaces {
