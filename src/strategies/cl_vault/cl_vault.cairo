@@ -46,6 +46,7 @@ mod ConcLiquidityVault {
   }; 
   use strkfarm_contracts::strategies::cl_vault::interface::{IClVault, FeeSettings, MyPosition, ClSettings};
   use strkfarm_contracts::helpers::safe_decimal_math;
+  use strkfarm_contracts::helpers::constants;
  
   component!(path: ERC20Component, storage: erc20, event: ERC20Event);
   component!(path: SRC5Component, storage: src5, event: SRC5Event);
@@ -61,7 +62,6 @@ mod ConcLiquidityVault {
   impl RewardShareImpl = RewardShareComponent::RewardShareImpl<ContractState>;
   impl RewardShare = RewardShareComponent::InternalImpl<ContractState>;
 
-  // @audit Remove this and use our Common.cairo component instead (it has necessary implementations around upgradeability, ownership, pausability)
   #[abi(embed_v0)]
   impl CommonCompImpl = CommonComp::CommonImpl<ContractState>;
   impl CommonInternalImpl = CommonComp::InternalImpl<ContractState>;
@@ -217,20 +217,15 @@ mod ConcLiquidityVault {
       let caller: ContractAddress = get_caller_address();
       assert(amount0 > 0 || amount1 > 0, 'amounts cannot be zero');
 
-      println!("depositing amount0 {:?}", amount0);
       self.handle_fees();
-      println!("fees handled");
 
       // mint shares
       let liquidity = self._max_liquidity(amount0, amount1);
-      println!("max liquidity {:?}", liquidity);
       let shares = self._convert_to_shares(liquidity.into());
-      println!("shares {:?}", shares);
       self.erc20.mint(receiver, shares);
 
       // deposit
       let liquidity_actual = self._ekubo_deposit(caller, amount0, amount1, caller);
-      println!("liquidity actual {:?}", liquidity_actual);
       assert(liquidity == liquidity_actual, 'invalid liquidity added');
 
       if (self.is_incentives_on.read()) {
@@ -410,20 +405,20 @@ mod ConcLiquidityVault {
         bounds
       );
 
-      println!("collecting fee");
-      self._collect_strat_fee();
-      println!("strat fee collected");
+      let (fee0, fee1) = self._collect_strat_fee();
 
-      let token0Bal: u256 = ERC20Helper::balanceOf(token0, this);
-      let token1Bal: u256 = ERC20Helper::balanceOf(token1, this);
-      if (token0Bal == 0 && token1Bal == 0) {
+      if (fee0 == 0 && fee1 == 0) {
         return;
       }
-      println!("token0 fees collected {:?}", token0Bal);
-      println!("token1 fees collected {:?}", token1Bal);
 
       // deposit fees
-      self._ekubo_deposit(this, token0Bal, token1Bal, this);
+      // @dev This action may leave some unused balances in the contract
+      // Adjusting these amounts to exact required amounts unnecessarily
+      // overcomplicates the logic and not of significant benefit
+      // - This is taken care during rebalance/handle_unused calls
+      // which we plan to run at regular intervals 
+      // (every fews days once or dependening on the amount of fee)
+      self._ekubo_deposit(this, fee0, fee1, this);
 
       self.emit(
         HandleFees {
@@ -449,9 +444,12 @@ mod ConcLiquidityVault {
       rewardsContract: ContractAddress,
       claim: Claim, 
       proof: Span<felt252>, 
-      swapInfo: AvnuMultiRouteSwap
+      swapInfo1: AvnuMultiRouteSwap,
+      swapInfo2: AvnuMultiRouteSwap
     ) {
       self.common.assert_not_paused();
+      assert(self.is_incentives_on.read(), 'incentives are off');
+
       let ekuboSettings = EkuboStyleClaimSettings {
         rewardsContract: rewardsContract,
       };
@@ -467,9 +465,45 @@ mod ConcLiquidityVault {
         claim,
         proof,
         snfSettings,
-        swapInfo,
+        swapInfo1.clone(), // doesnt do anything anyways
         IPriceOracleDispatcher {contract_address: self.oracle.read()}
       );
+
+      // validate swap info
+      // aim to swap 100% of STRK into token0 and token1
+      let token0 = self.pool_key.read().token0;
+      let token1 = self.pool_key.read().token1;
+      assert(swapInfo1.token_from_address == constants::STRK_ADDRESS(), 'invalid token from address [1]');
+      assert(swapInfo1.token_to_address == token0, 'invalid token to address [1]');
+      assert(swapInfo2.token_from_address == constants::STRK_ADDRESS(), 'invalid token from address [2]');
+      assert(swapInfo2.token_to_address == token1, 'invalid token to address [2]');
+      let STRK_bal = ERC20Helper::balanceOf(constants::STRK_ADDRESS(), get_contract_address());
+      assert(swapInfo1.token_from_amount + swapInfo2.token_from_amount == STRK_bal, 'invalid STRK balance');
+
+      let token0_amt = swapInfo1.swap(IPriceOracleDispatcher { contract_address: self.oracle.read() });
+      let token1_amt = swapInfo2.swap(IPriceOracleDispatcher { contract_address: self.oracle.read() });
+
+      let bal0_pre = ERC20Helper::balanceOf(token0, get_contract_address());
+      let bal1_pre = ERC20Helper::balanceOf(token1, get_contract_address());
+      let expected_liquidity = self._max_liquidity(token0_amt, token1_amt);
+      let shares = self._convert_to_shares(expected_liquidity.into());
+      let new_liquidity = self._ekubo_deposit(get_contract_address(), token0_amt, token1_amt, get_contract_address());
+      assert(new_liquidity == expected_liquidity, 'invalid liquidity added');
+      let bal0_post = ERC20Helper::balanceOf(token0, get_contract_address());
+      let bal1_post = ERC20Helper::balanceOf(token1, get_contract_address());
+      let diff0 = token0_amt - (bal0_pre - bal0_post);
+      let diff1 = token1_amt - (bal1_pre - bal1_post);
+      assert(safe_decimal_math::is_under_by_percent_bps(diff0, token0_amt, 1), 'invalid token0 amount');
+      assert(safe_decimal_math::is_under_by_percent_bps(diff1, token1_amt, 1), 'invalid token1 amount');
+
+      let all_shares = self.total_supply();
+      self
+        .reward_share
+        .update_harvesting_rewards(
+          new_liquidity.try_into().unwrap(),
+          shares.try_into().unwrap(), 
+          all_shares.try_into().unwrap()
+        );
     }
 
     /// @notice Retrieves the position key associated with the contract.
@@ -540,12 +574,10 @@ mod ConcLiquidityVault {
         new_bounds: Bounds,
         swap_params: AvnuMultiRouteSwap
     ) {
-        println!("rebalancing2");
         self.common.assert_relayer_role();
         let tick_curr = self.get_pool_price().tick;
         assert(new_bounds.lower <= tick_curr, 'invalid lower bound');
         assert(new_bounds.upper >= tick_curr, 'invalid upper bound');
-        println!("rebalancing");
         self._collect_strat_fee();
       
         // Withdraw liquidity
@@ -553,16 +585,9 @@ mod ConcLiquidityVault {
         let old_position = self.get_position();
         self._withdraw_position(old_position.liquidity.into());
         assert(self.get_position().liquidity == 0, 'invalid liquidity');
-        println!("liquidity withdrawn");
 
         // Update bounds
         self.set_sqrt_lower_upper(new_bounds);
-        println!("bounds updated");
-
-        let bal0 = ERC20Helper::balanceOf(self.pool_key.read().token0, get_contract_address());
-        let bal1 = ERC20Helper::balanceOf(self.pool_key.read().token1, get_contract_address());
-        println!("bal0 before swap {:?}", bal0);
-        println!("bal1 before swap {:?}", bal1);
 
         // Handle unused balances and deposit
         self.handle_unused(swap_params);
@@ -599,22 +624,16 @@ mod ConcLiquidityVault {
         );
 
         // Perform swap before deposit to adjust balances
-        println!("swapping");
         swap_params.swap(IPriceOracleDispatcher { contract_address: self.oracle.read() });
-        println!("swap done");
 
         // Deposit remaining balances
         let token0_bal = ERC20Helper::balanceOf(pool_key.token0, this);
         let token1_bal = ERC20Helper::balanceOf(pool_key.token1, this);
-        println!("depositing token0 {:?}", token0_bal);
-        println!("depositing token1 {:?}", token1_bal);
         self._ekubo_deposit(this, token0_bal, token1_bal, this);
 
         // Assert that most of the balance is used
         let token0_bal_new = ERC20Helper::balanceOf(pool_key.token0, this);
         let token1_bal_new = ERC20Helper::balanceOf(pool_key.token1, this);
-        println!("token0 bal: {:?}", token0_bal_new);
-        println!("token1 bal: {:?}", token1_bal_new);
         assert(safe_decimal_math::is_under_by_percent_bps(token0_bal_new, token0_bal, 1), 'invalid token0 balance');
         assert(safe_decimal_math::is_under_by_percent_bps(token1_bal_new, token1_bal, 1), 'invalid token1 balance');
     }
@@ -702,18 +721,8 @@ mod ConcLiquidityVault {
       let this = get_contract_address();
       let positions_disp = self.ekubo_positions_contract.read();
       if (this == sender) {
-        println!("transfering");
-        let bal = ERC20Helper::balanceOf(token, this);
-        println!("balance {:?}", bal);
-        println!("amount {:?}", amount);
         ERC20Helper::transfer(token, positions_disp.contract_address, amount);
       } else {
-        println!("transfering from");
-        println!("vault_init:this: {:?}", sender);
-
-        let bal = ERC20Helper::balanceOf(token, sender);
-        println!("balance {:?}", bal);
-        println!("amount {:?}", amount);
         ERC20Helper::transfer_from(token, sender, positions_disp.contract_address, amount);
       }
     }
@@ -755,7 +764,6 @@ mod ConcLiquidityVault {
       // send funds to ekubo
       self._pay_ekubo(sender, token0, amount0);
       self._pay_ekubo(sender, token1, amount1);
-      println!("depositing");
 
       let liq_before_deposit = self.get_position().liquidity;
       let nft_id = self.contract_nft_id.read();
@@ -775,11 +783,9 @@ mod ConcLiquidityVault {
           0
         );
       }
-      println!("deposited");
       // clear any unused tokens and send to receiver
       positions_disp.clear_minimum_to_recipient(token0, 0, receiver);
       positions_disp.clear_minimum_to_recipient(token1, 0, receiver);
-      println!("tokens cleared");
 
       let liq_after_deposit = self.get_position().liquidity;
       return (liq_after_deposit - liq_before_deposit).into();
@@ -801,9 +807,6 @@ mod ConcLiquidityVault {
         pool_key, 
         bounds
       );
-      println!("fees collected");
-      println!("fee0: {:?}", fee0);
-      println!("fee1: {:?}", fee1);
 
       // compute our fee share
       let fee_settings = self.fee_settings.read();
@@ -811,8 +814,6 @@ mod ConcLiquidityVault {
       let collector = fee_settings.fee_collector;
       let fee_eth = (fee0.into() * bps) / 10000;
       let fee_wst_eth = (fee1.into() * bps) / 10000;
-      println!("fee eth {:?}", fee_eth);
-      println!("fee wst eth {:?}", fee_wst_eth);
 
       // transfer to fee collector
       ERC20Helper::transfer(token0, collector, fee_eth);
@@ -845,9 +846,6 @@ mod ConcLiquidityVault {
 
     fn _max_liquidity(self: @ContractState, amount0: u256, amount1: u256) -> u256 {
       let current_sqrt_price = self.get_pool_price().sqrt_ratio;
-      println!("current sqrt price {:?}", current_sqrt_price);
-      println!("lower bound {:?}", self.sqrt_lower.read());
-      println!("upper bound {:?}", self.sqrt_upper.read());
       let liquidity = ekuboLibDispatcher().max_liquidity(
         current_sqrt_price,
         self.sqrt_lower.read(),
@@ -862,25 +860,19 @@ mod ConcLiquidityVault {
   /// hooks defining before and after actions for the harvest function
   impl HarvestHooksImpl of HarvestHooksTrait<ContractState> {
     fn before_update(ref self: ContractState) -> HarvestBeforeHookResult {
-      // swap into token0 for now
-      let pool_key = self.pool_key.read();
-      HarvestBeforeHookResult { baseToken: pool_key.token0, }
+      // dont do any swap here
+      // returning STRK address will do nothing, just claim STRK and leaves it
+      // The handling is anyways done in the harvest function after simple_harvest call
+      HarvestBeforeHookResult { baseToken: constants::STRK_ADDRESS() }
     }
 
     fn after_update(ref self: ContractState, token: ContractAddress, amount: u256) {
-      // transfer fee
-      let fee_settings = self.fee_settings.read();
-      let fee = (amount * fee_settings.fee_bps) / 10000;
-      if (fee > 0) {
-        ERC20Helper::transfer(token, fee_settings.fee_collector, fee);
+      let fee_amount = amount * self.fee_settings.read().fee_bps / 10000;
+      if (fee_amount > 0) {
+        ERC20Helper::transfer(token, self.fee_settings.read().fee_collector, fee_amount);
       }
 
-      // let remaining amount be in the vault. handle_unused will take care of it
-
-      // todo fix this
-      // self
-      //   .reward_share
-      //   .update_harvesting_rewards(harvest_amount, shares, all_shares.acc1_supply_shares,);
+      // leave the rest in the contract, will be handled by the harvest function
     }
   }
 }

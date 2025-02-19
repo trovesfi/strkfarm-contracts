@@ -40,7 +40,13 @@ pub trait IClVault<TContractState> {
   fn get_position_key(self: @TContractState) -> PositionKey;
   fn get_position(self: @TContractState) -> Position;
   fn handle_fees(ref self: TContractState);
-  fn harvest(ref self: TContractState, rewardsContract: ContractAddress, claim: Claim, proof: Span<felt252>, swapInfo: AvnuMultiRouteSwap);
+  fn harvest(
+    ref self: TContractState, 
+    rewardsContract: ContractAddress, 
+    claim: Claim, proof: Span<felt252>, 
+    swapInfo1: AvnuMultiRouteSwap,
+    swapInfo2: AvnuMultiRouteSwap
+  );
   fn get_settings(self: @TContractState) -> ClSettings; // @audit should be get_settings (follow snake_case)
   fn handle_unused(ref self: TContractState, swap_params: AvnuMultiRouteSwap);
  

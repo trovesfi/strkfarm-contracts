@@ -57,7 +57,6 @@ pub mod RewardShareComponent {
         rewards_len: u32,
         total_underlying_shares: felt252, // total new shares of underlying contract (e.g. in frmzSTRK)
         user_rewards_info: starknet::storage::Map<ContractAddress, UserRewardsInfo>, // (user) => UserRewardsInfo
-        Ownable_owner: ContractAddress, // todo remove after upgrade
     }
 
     #[derive(Drop, starknet::Event)]
