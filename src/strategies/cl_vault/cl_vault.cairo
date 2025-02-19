@@ -18,7 +18,10 @@ mod ConcLiquidityVault {
     ERC20Component,
     ERC20HooksEmptyImpl
   };
-
+  use strkfarm_contracts::components::harvester::reward_shares::{RewardShareComponent, IRewardShare};
+  use strkfarm_contracts::components::harvester::reward_shares::RewardShareComponent::{
+      InternalTrait as RewardShareInternalImpl
+  };
   use strkfarm_contracts::components::harvester::harvester_lib::{
     HarvestConfig, HarvestConfigImpl,
     HarvestHooksTrait
@@ -51,9 +54,12 @@ mod ConcLiquidityVault {
   component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
   component!(path: PausableComponent, storage: pausable, event: PausableEvent);
   component!(path: CommonComp, storage: common, event: CommonCompEvent);
+  component!(path: RewardShareComponent, storage: reward_share, event: RewardShareEvent);
+  use openzeppelin::token::erc20::interface::IERC20Mixin;
 
   #[abi(embed_v0)]
-  impl ERC20MixinImpl = ERC20Component::ERC20MixinImpl<ContractState>;
+  impl RewardShareImpl = RewardShareComponent::RewardShareImpl<ContractState>;
+  impl RewardShare = RewardShareComponent::InternalImpl<ContractState>;
 
   // @audit Remove this and use our Common.cairo component instead (it has necessary implementations around upgradeability, ownership, pausability)
   #[abi(embed_v0)]
@@ -101,6 +107,8 @@ mod ConcLiquidityVault {
     pausable: PausableComponent::Storage,
     #[substorage(v0)]
     common: CommonComp::Storage,
+    #[substorage(v0)]
+    reward_share: RewardShareComponent::Storage,
 
     // constants
     ekubo_positions_contract: IEkuboDispatcher,
@@ -117,6 +125,8 @@ mod ConcLiquidityVault {
     contract_nft_id: u64,
     sqrt_lower: u256,
     sqrt_upper: u256,
+
+    is_incentives_on: bool
   }
 
   #[event]
@@ -136,6 +146,9 @@ mod ConcLiquidityVault {
     PausableEvent: PausableComponent::Event,
     #[flat]
     CommonCompEvent: CommonComp::Event,
+    #[flat]
+    RewardShareEvent: RewardShareComponent::Event,
+
     Deposit: Deposit,
     Withdraw: Withdraw,
     Rebalance: Rebalance,
@@ -186,6 +199,7 @@ mod ConcLiquidityVault {
     self.ekubo_core.write(ekubo_core);
     self.oracle.write(oracle);
     self.fee_settings.write(fee_settings);
+    self.is_incentives_on.write(true);
   }
 
   #[abi(embed_v0)]
@@ -199,6 +213,7 @@ mod ConcLiquidityVault {
     /// @param receiver The address that will receive the minted shares.
     /// @return shares The number of shares minted for the deposited liquidity.
     fn deposit(ref self: ContractState, amount0: u256, amount1: u256, receiver: ContractAddress) -> u256 {
+      self.common.assert_not_paused();
       let caller: ContractAddress = get_caller_address();
       assert(amount0 > 0 || amount1 > 0, 'amounts cannot be zero');
 
@@ -217,6 +232,26 @@ mod ConcLiquidityVault {
       let liquidity_actual = self._ekubo_deposit(caller, amount0, amount1, caller);
       println!("liquidity actual {:?}", liquidity_actual);
       assert(liquidity == liquidity_actual, 'invalid liquidity added');
+
+      if (self.is_incentives_on.read()) {
+        let (additional_shares, last_block, pending_round_points) = self.reward_share.get_additional_shares(
+          receiver
+        );
+        let all_shares_user = self.erc20.balance_of(receiver);
+        let all_supply = self.erc20.total_supply();
+        self.reward_share.update_user_rewards(
+          receiver,
+          additional_shares + all_shares_user.try_into().unwrap(),
+          additional_shares,
+          last_block,
+          pending_round_points,
+          (all_supply - shares).try_into().unwrap()
+        );
+        let additional_uint: u256 = additional_shares.into();
+        if (additional_uint > 0) {
+          self.erc20.mint(receiver, additional_uint);
+        }
+      }
 
       self.emit(
         Deposit {
@@ -237,9 +272,22 @@ mod ConcLiquidityVault {
     /// @param receiver The address that will receive the withdrawn assets.
     /// @return position A struct containing the withdrawn liquidity, amount0, and amount1.
     fn withdraw(ref self: ContractState, shares: u256, receiver: ContractAddress) -> MyPosition {
+      self.common.assert_not_paused();
       let caller = get_caller_address();
-      let max_shares = self.erc20.balance_of(caller);
+
+      let (additional_shares, last_block, pending_round_points) = self.reward_share.get_additional_shares(
+        caller
+      );
+      let additional_uint: u256 = additional_shares.into();
+      let prev_bal = self.erc20.balance_of(caller);
+      let max_shares = prev_bal + additional_uint;
       assert(shares <= max_shares, 'insufficient shares');
+
+      // settle already earned shares
+      if (additional_uint > 0) {
+        self.erc20.mint(caller, additional_uint);
+      }
+
       let userPosition = self.convert_to_assets(shares);
       assert(userPosition.liquidity > 0, 'invalid liquidity removed');
 
@@ -273,6 +321,17 @@ mod ConcLiquidityVault {
       }
       assert((old_liq - current_liq).into() == userPosition.liquidity, 'invalid liquidity removed');
 
+      if (self.is_incentives_on.read()) {
+        let all_supply = self.erc20.total_supply();
+        self.reward_share.update_user_rewards(
+          caller,
+          (max_shares - shares).try_into().unwrap(),
+          additional_shares,
+          last_block,
+          pending_round_points,
+          (all_supply + shares).try_into().unwrap()
+        );
+      }
       self.emit(
         Withdraw {
           sender: caller,
@@ -336,6 +395,7 @@ mod ConcLiquidityVault {
     /// @dev This function retrieves token balances, collects strategy fees, deposits 
     /// collected fees back into the liquidity pool, and emits a fee-handling event.
     fn handle_fees(ref self: ContractState) {
+      self.common.assert_not_paused();
       let this: ContractAddress = get_contract_address();
       let poolInfo = self.pool_key.read();
       let token0: ContractAddress = poolInfo.token0;
@@ -391,6 +451,7 @@ mod ConcLiquidityVault {
       proof: Span<felt252>, 
       swapInfo: AvnuMultiRouteSwap
     ) {
+      self.common.assert_not_paused();
       let ekuboSettings = EkuboStyleClaimSettings {
         rewardsContract: rewardsContract,
       };
@@ -453,106 +514,167 @@ mod ConcLiquidityVault {
           oracle: self.oracle.read(),
           fee_settings: self.fee_settings.read()
       }
-  }
+    }
 
-  /// @notice Updates the fee settings of the contract.
-  /// @dev Only the contract owner can call this function to modify fee settings.
-  /// @param fee_settings The new fee settings to be applied.
-  fn set_settings(ref self: ContractState, fee_settings: FeeSettings) {
-      self.common.assert_governor_role();
-      self.fee_settings.write(fee_settings);
-      self.emit(fee_settings);
-  }
+    /// @notice Updates the fee settings of the contract.
+    /// @dev Only the contract owner can call this function to modify fee settings.
+    /// @param fee_settings The new fee settings to be applied.
+    fn set_settings(ref self: ContractState, fee_settings: FeeSettings) {
+        self.common.assert_governor_role();
+        self.fee_settings.write(fee_settings);
+        self.emit(fee_settings);
+    }
 
-  /// @notice Rebalances the liquidity position based on new bounds.
-  /// @dev This function withdraws existing liquidity, adjusts token balances via swaps, 
-  ///      updates the position bounds, and redeposits liquidity.
-  /// @param new_bounds The new lower and upper tick bounds for the position.
-  /// @param swap_params Parameters for swapping tokens to balance liquidity before redeposit.
-  fn rebalance(
-      ref self: ContractState, 
-      new_bounds: Bounds,
-      swap_params: AvnuMultiRouteSwap
-  ) {
-      self.common.assert_relayer_role();
-      let tick_curr = self.get_pool_price().tick;
-      assert(new_bounds.lower <= tick_curr, 'invalid lower bound');
-      assert(new_bounds.upper >= tick_curr, 'invalid upper bound');
+    fn set_incentives_off(ref self: ContractState) {
+        self.common.assert_governor_role();
+        self.is_incentives_on.write(false);
+    }
 
-      self._collect_strat_fee();
+    /// @notice Rebalances the liquidity position based on new bounds.
+    /// @dev This function withdraws existing liquidity, adjusts token balances via swaps, 
+    ///      updates the position bounds, and redeposits liquidity.
+    /// @param new_bounds The new lower and upper tick bounds for the position.
+    /// @param swap_params Parameters for swapping tokens to balance liquidity before redeposit.
+    fn rebalance(
+        ref self: ContractState, 
+        new_bounds: Bounds,
+        swap_params: AvnuMultiRouteSwap
+    ) {
+        println!("rebalancing2");
+        self.common.assert_relayer_role();
+        let tick_curr = self.get_pool_price().tick;
+        assert(new_bounds.lower <= tick_curr, 'invalid lower bound');
+        assert(new_bounds.upper >= tick_curr, 'invalid upper bound');
+        println!("rebalancing");
+        self._collect_strat_fee();
+      
+        // Withdraw liquidity
+        let old_bounds = self.bounds_settings.read();
+        let old_position = self.get_position();
+        self._withdraw_position(old_position.liquidity.into());
+        assert(self.get_position().liquidity == 0, 'invalid liquidity');
+        println!("liquidity withdrawn");
 
-      // Withdraw liquidity
-      let old_bounds = self.bounds_settings.read();
-      let old_position = self.get_position();
-      self._withdraw_position(old_position.liquidity.into());
-      assert(self.get_position().liquidity == 0, 'invalid liquidity');
-      println!("liquidity withdrawn");
+        // Update bounds
+        self.set_sqrt_lower_upper(new_bounds);
+        println!("bounds updated");
 
-      // Update bounds
-      self.set_sqrt_lower_upper(new_bounds);
-      println!("bounds updated");
+        let bal0 = ERC20Helper::balanceOf(self.pool_key.read().token0, get_contract_address());
+        let bal1 = ERC20Helper::balanceOf(self.pool_key.read().token1, get_contract_address());
+        println!("bal0 before swap {:?}", bal0);
+        println!("bal1 before swap {:?}", bal1);
 
-      let bal0 = ERC20Helper::balanceOf(self.pool_key.read().token0, get_contract_address());
-      let bal1 = ERC20Helper::balanceOf(self.pool_key.read().token1, get_contract_address());
-      println!("bal0 before swap {:?}", bal0);
-      println!("bal1 before swap {:?}", bal1);
+        // Handle unused balances and deposit
+        self.handle_unused(swap_params);
+        let new_position = self.get_position();
 
-      // Handle unused balances and deposit
-      self.handle_unused(swap_params);
-      let new_position = self.get_position();
+        self.emit(
+            Rebalance {
+                old_bounds,
+                old_liquidity: old_position.liquidity.into(),
+                new_bounds,
+                new_liquidity: new_position.liquidity.into()
+            }
+        );
+    }
 
-      self.emit(
-          Rebalance {
-              old_bounds,
-              old_liquidity: old_position.liquidity.into(),
-              new_bounds,
-              new_liquidity: new_position.liquidity.into()
-          }
-      );
-  }
+    /// @notice Handles any unused token balances by swapping them before redepositing liquidity.
+    /// @dev This function ensures that the majority of token balances are used efficiently before deposit.
+    /// @param swap_params Parameters for swapping tokens to balance liquidity before redeposit.
+    fn handle_unused(
+        ref self: ContractState, 
+        swap_params: AvnuMultiRouteSwap
+    ) {
+        let this = get_contract_address();
+        let pool_key = self.pool_key.read();
+        assert(
+            swap_params.token_from_address == pool_key.token0 ||
+            swap_params.token_from_address == pool_key.token1, 
+            'invalid swap params [1]'
+        );
+        assert(
+            swap_params.token_to_address == pool_key.token0 ||
+            swap_params.token_to_address == pool_key.token1, 
+            'invalid swap params [2]'
+        );
 
-  /// @notice Handles any unused token balances by swapping them before redepositing liquidity.
-  /// @dev This function ensures that the majority of token balances are used efficiently before deposit.
-  /// @param swap_params Parameters for swapping tokens to balance liquidity before redeposit.
-  fn handle_unused(
-      ref self: ContractState, 
-      swap_params: AvnuMultiRouteSwap
-  ) {
-      let this = get_contract_address();
-      let pool_key = self.pool_key.read();
-      assert(
-          swap_params.token_from_address == pool_key.token0 ||
-          swap_params.token_from_address == pool_key.token1, 
-          'invalid swap params [1]'
-      );
-      assert(
-          swap_params.token_to_address == pool_key.token0 ||
-          swap_params.token_to_address == pool_key.token1, 
-          'invalid swap params [2]'
-      );
+        // Perform swap before deposit to adjust balances
+        println!("swapping");
+        swap_params.swap(IPriceOracleDispatcher { contract_address: self.oracle.read() });
+        println!("swap done");
 
-      // Perform swap before deposit to adjust balances
-      println!("swapping");
-      swap_params.swap(IPriceOracleDispatcher { contract_address: self.oracle.read() });
-      println!("swap done");
+        // Deposit remaining balances
+        let token0_bal = ERC20Helper::balanceOf(pool_key.token0, this);
+        let token1_bal = ERC20Helper::balanceOf(pool_key.token1, this);
+        println!("depositing token0 {:?}", token0_bal);
+        println!("depositing token1 {:?}", token1_bal);
+        self._ekubo_deposit(this, token0_bal, token1_bal, this);
 
-      // Deposit remaining balances
-      let token0_bal = ERC20Helper::balanceOf(pool_key.token0, this);
-      let token1_bal = ERC20Helper::balanceOf(pool_key.token1, this);
-      println!("depositing token0 {:?}", token0_bal);
-      println!("depositing token1 {:?}", token1_bal);
-      self._ekubo_deposit(this, token0_bal, token1_bal, this);
-
-      // Assert that most of the balance is used
-      let token0_bal_new = ERC20Helper::balanceOf(pool_key.token0, this);
-      let token1_bal_new = ERC20Helper::balanceOf(pool_key.token1, this);
-      println!("token0 bal: {:?}", token0_bal_new);
-      println!("token1 bal: {:?}", token1_bal_new);
-      assert(safe_decimal_math::is_under_by_percent_bps(token0_bal_new, token0_bal, 1), 'invalid token0 balance');
-      assert(safe_decimal_math::is_under_by_percent_bps(token1_bal_new, token1_bal, 1), 'invalid token1 balance');
+        // Assert that most of the balance is used
+        let token0_bal_new = ERC20Helper::balanceOf(pool_key.token0, this);
+        let token1_bal_new = ERC20Helper::balanceOf(pool_key.token1, this);
+        println!("token0 bal: {:?}", token0_bal_new);
+        println!("token1 bal: {:?}", token1_bal_new);
+        assert(safe_decimal_math::is_under_by_percent_bps(token0_bal_new, token0_bal, 1), 'invalid token0 balance');
+        assert(safe_decimal_math::is_under_by_percent_bps(token1_bal_new, token1_bal, 1), 'invalid token1 balance');
     }
   }
 
+  #[abi(embed_v0)]
+  impl VesuERC20Impl of IERC20Mixin<ContractState> {
+    fn total_supply(self: @ContractState) -> u256 {
+      let unminted_shares = self.reward_share.get_total_unminted_shares();
+      let total_supply: u256 = self.erc20.total_supply() + unminted_shares.try_into().unwrap();
+
+      total_supply
+    }
+
+    fn balance_of(self: @ContractState, account: ContractAddress) -> u256 {
+      let (additional_shares, _, _) = self.reward_share.get_additional_shares(account);
+      self.erc20.balance_of(account) + additional_shares.into()
+    }
+    
+    fn allowance(self: @ContractState, owner: ContractAddress, spender: ContractAddress) -> u256 {
+      self.erc20.allowance(owner, spender)
+    }
+    fn transfer(ref self: ContractState, recipient: ContractAddress, amount: u256) -> bool {
+      self.erc20.transfer(recipient, amount)
+    }
+    fn transfer_from(
+        ref self: ContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256,
+    ) -> bool {
+      self.erc20.transfer_from(sender, recipient, amount)
+    }
+    fn approve(ref self: ContractState, spender: ContractAddress, amount: u256) -> bool {
+      self.erc20.approve(spender, amount)
+    }
+
+    fn name(self: @ContractState) -> ByteArray {
+      self.erc20.name()
+    }
+
+    fn symbol(self: @ContractState) -> ByteArray {
+      self.erc20.symbol()
+    }
+
+    fn decimals(self: @ContractState) -> u8 {
+      self.erc20.decimals()
+    }
+
+    fn totalSupply(self: @ContractState) -> u256 {
+      self.total_supply()
+    }
+
+    fn balanceOf(self: @ContractState, account: ContractAddress) -> u256 {
+      self.balance_of(account)
+    }
+
+    fn transferFrom(
+        ref self: ContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256,
+    ) -> bool {
+      self.transfer_from(sender, recipient, amount)
+    }
+  }
 
   #[generate_trait]
   pub impl InternalImpl of InternalTrait {
@@ -746,7 +868,19 @@ mod ConcLiquidityVault {
     }
 
     fn after_update(ref self: ContractState, token: ContractAddress, amount: u256) {
-      // do nothing, the backend will then call `handle_unused function`
+      // transfer fee
+      let fee_settings = self.fee_settings.read();
+      let fee = (amount * fee_settings.fee_bps) / 10000;
+      if (fee > 0) {
+        ERC20Helper::transfer(token, fee_settings.fee_collector, fee);
+      }
+
+      // let remaining amount be in the vault. handle_unused will take care of it
+
+      // todo fix this
+      // self
+      //   .reward_share
+      //   .update_harvesting_rewards(harvest_amount, shares, all_shares.acc1_supply_shares,);
     }
   }
 }

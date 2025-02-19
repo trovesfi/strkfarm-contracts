@@ -42,7 +42,9 @@ pub trait IClVault<TContractState> {
   fn handle_fees(ref self: TContractState);
   fn harvest(ref self: TContractState, rewardsContract: ContractAddress, claim: Claim, proof: Span<felt252>, swapInfo: AvnuMultiRouteSwap);
   fn get_settings(self: @TContractState) -> ClSettings; // @audit should be get_settings (follow snake_case)
-  fn rebalance(ref self: TContractState, new_bounds: Bounds, swap_params: AvnuMultiRouteSwap);
   fn handle_unused(ref self: TContractState, swap_params: AvnuMultiRouteSwap);
+ 
+  fn rebalance(ref self: TContractState, new_bounds: Bounds, swap_params: AvnuMultiRouteSwap);
   fn set_settings(ref self: TContractState, fee_settings: FeeSettings);
+  fn set_incentives_off(ref self: TContractState);
 }

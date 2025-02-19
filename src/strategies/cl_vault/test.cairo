@@ -31,8 +31,11 @@ pub mod test_cl_vault {
   use strkfarm_contracts::components::swap::{get_swap_params};
   use strkfarm_contracts::interfaces::oracle::{IPriceOracle, IPriceOracleDispatcher, IPriceOracleDispatcherTrait, PriceWithUpdateTime};
   use openzeppelin::token::erc20::interface::{ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
-  // use avnu::exchange::IExchangeDispatcherTrait;
   use strkfarm_contracts::helpers::safe_decimal_math;
+  use strkfarm_contracts::tests::utils as test_utils;
+  use strkfarm_contracts::interfaces::IEkuboDistributor::{
+    IEkuboDistributor, Claim, IEkuboDistributorDispatcherTrait, IEkuboDistributorDispatcher
+};
 
   fn get_bounds() -> Bounds {
     let bounds = Bounds {
@@ -217,8 +220,8 @@ pub mod test_cl_vault {
   } 
 
   fn deploy_cl_vault() -> ( IClVaultDispatcher, ERC20ABIDispatcher ) {
+    let accessControl = test_utils::deploy_access_control();
     let clVault = declare("ConcLiquidityVault").unwrap().contract_class();
-    let admin = get_contract_address();
     let poolkey = get_pool_key();
     let bounds = get_bounds();
     let fee_bps = 1000;
@@ -227,7 +230,7 @@ pub mod test_cl_vault {
     let mut calldata: Array<felt252> = array![];
     calldata.append_serde(name);
     calldata.append_serde(symbol);
-    calldata.append(admin.into());
+    calldata.append(accessControl.into());
     calldata.append(constants::EKUBO_POSITIONS().into());
     calldata.append_serde(bounds);
     calldata.append_serde(poolkey);
@@ -248,8 +251,8 @@ pub mod test_cl_vault {
   }
 
   fn deploy_cl_vault_xstrk() -> ( IClVaultDispatcher, ERC20ABIDispatcher ) {
+    let accessControl = test_utils::deploy_access_control();
     let clVault = declare("ConcLiquidityVault").unwrap().contract_class();
-    let admin = get_contract_address();
     let poolkey = get_pool_key_xstrk();
     let bounds = get_bounds_xstrk();
     let strk_xstrk_route = get_strk_xstrk_route();
@@ -264,7 +267,7 @@ pub mod test_cl_vault {
     let mut calldata: Array<felt252> = array![];
     calldata.append_serde(name);
     calldata.append_serde(symbol);
-    calldata.append(admin.into());
+    calldata.append(accessControl.into());
     calldata.append(constants::EKUBO_POSITIONS().into());
     calldata.append_serde(bounds);
     calldata.append_serde(poolkey);
@@ -349,8 +352,10 @@ pub mod test_cl_vault {
     println!("clVault.contract_address: {:?}", clVault.contract_address);
 
     // deposit once
+    let expected_shares1 = clVault.convert_to_shares(amount, amount);
     let shares1 = clVault.deposit(amount, amount, this);
     assert(shares1 > 0, 'invalid shares minted');
+    assert(shares1 == expected_shares1, 'invalid shares minted');
     let settings: ClSettings = clVault.get_settings();
     let nft_id: u64 = settings.contract_nft_id;
     let nft_id_u256: u256 = nft_id.into();
@@ -372,8 +377,10 @@ pub mod test_cl_vault {
     
     // deposit again
     vault_init(amount);
+    let expected_shares2 = clVault.convert_to_shares(amount, amount);
     let shares2 = clVault.deposit(amount, amount, this);
     assert(shares2 > 0, 'invalid shares minted');
+    assert(shares2 == expected_shares2, 'invalid shares minted');
     let settings: ClSettings = clVault.get_settings();
     assert(nft_id == settings.contract_nft_id, 'nft id not constant');
     assert(ERC20Helper::balanceOf(constants::ETH_ADDRESS(), clVault.contract_address) == 0, 'invalid ETH amount');
@@ -584,8 +591,9 @@ pub mod test_cl_vault {
         integrator_fee_recipient: contract_address_const::<0x00>(),
         routes
     };
+    println!("swap params ready");
     clVault.rebalance(bounds, swap_params);
-
+    println!("rebalance passed");
     // assert total usd value is roughly same after rebalance
     let token_info_after_rebal = IEkuboDispatcher {contract_address: constants::EKUBO_POSITIONS()}.get_token_info(
       clVault.get_settings().contract_nft_id,
@@ -721,5 +729,227 @@ pub mod test_cl_vault {
     println!("vault bal1: {:?}", vault_bal1);
     assert(safe_decimal_math::is_under_by_percent_bps(vault_bal0, amount, 1), 'invalid token bal');
     assert(safe_decimal_math::is_under_by_percent_bps(vault_bal1, amount, 1), 'invalid token bal');
+  }
+
+  #[test]
+  #[fork("mainnet_1134787")]
+  #[should_panic(expected: ('Access: Missing relayer role',))]
+  fn test_rebalance_invalid_permissions() {
+    let this = get_contract_address();
+    let (clVault, _) = deploy_cl_vault();
+
+    // new bounds
+    let new_lower_bound: u128 = 169000;
+    let new_upper_bound: u128 = 180000;
+    let bounds = Bounds {
+      lower: i129 {
+        mag: new_lower_bound,
+        sign: false
+      },
+      upper: i129 {
+        mag: new_upper_bound,
+        sign: false
+      }
+    };
+
+    let mut eth_route = get_eth_wst_route();
+    eth_route.percent = 1000000000000;
+    let swap_params = AvnuMultiRouteSwap {
+        token_from_address: eth_route.clone().token_from,
+        // got amont from trail and error 
+        token_from_amount: 2744 * pow::ten_pow(18) / 1000,
+        token_to_address: eth_route.token_to,
+        token_to_amount: 0,
+        token_to_min_amount: 0,
+        beneficiary: clVault.contract_address,
+        integrator_fee_amount_bps: 0,
+        integrator_fee_recipient: contract_address_const::<0x00>(),
+        routes: array![]
+    };
+    println!("swap params ready");
+    start_cheat_caller_address(clVault.contract_address, constants::EKUBO_USER_ADDRESS());
+    clVault.rebalance(bounds, swap_params);
+    stop_cheat_caller_address(clVault.contract_address);
+  }
+
+  #[test]
+  #[fork("mainnet_1134787")]
+  #[should_panic(expected: ('Access: Missing governor role',))]
+  fn test_set_settings_invalid_permissions() {
+    let (clVault, _) = deploy_cl_vault();
+
+    start_cheat_caller_address(clVault.contract_address, constants::EKUBO_USER_ADDRESS());
+    let fee_settings = FeeSettings {
+      fee_bps: 1000,
+      fee_collector: contract_address_const::<0x123>()
+    };
+    clVault.set_settings(fee_settings);
+    stop_cheat_caller_address(clVault.contract_address);
+  }
+  
+
+  #[test]
+  #[fork("mainnet_1134787")]
+  fn test_set_settings_pass() {
+    let (clVault, _) = deploy_cl_vault();
+
+    // new bounds
+    let fee_settings = FeeSettings {
+      fee_bps: 1000,
+      fee_collector: contract_address_const::<0x123>()
+    };
+    clVault.set_settings(fee_settings);
+  }
+
+  #[test]
+  #[fork("mainnet_1134787")]
+  fn test_set_incentives_pass() {
+    let (clVault, _) = deploy_cl_vault();
+
+    clVault.set_incentives_off();
+  }
+
+  #[test]
+  #[fork("mainnet_1134787")]
+  #[should_panic(expected: ('Access: Missing governor role',))]
+  fn test_set_incentives_invalid_permissions() {
+    let (clVault, _) = deploy_cl_vault();
+
+    start_cheat_caller_address(clVault.contract_address, constants::EKUBO_USER_ADDRESS());
+    clVault.set_incentives_off();
+    stop_cheat_caller_address(clVault.contract_address);
+  }
+
+  #[test]
+  #[fork("mainnet_1134787")]
+  #[should_panic(expected: ('invalid swap params [1]',))]
+  fn test_handle_ununsed_invalid_from_token() {
+    let (clVault, _) = deploy_cl_vault();
+
+    let mut eth_route = get_eth_wst_route();
+    eth_route.percent = 1000000000000;
+    let swap_params = AvnuMultiRouteSwap {
+        token_from_address: constants::STRK_ADDRESS(),
+        // got amont from trail and error 
+        token_from_amount: 2744 * pow::ten_pow(18) / 1000,
+        token_to_address: eth_route.token_to,
+        token_to_amount: 0,
+        token_to_min_amount: 0,
+        beneficiary: clVault.contract_address,
+        integrator_fee_amount_bps: 0,
+        integrator_fee_recipient: contract_address_const::<0x00>(),
+        routes: array![]
+    };
+    println!("swap params ready");
+    clVault.handle_unused(swap_params);
+  }
+
+  #[test]
+  #[fork("mainnet_1134787")]
+  #[should_panic(expected: ('invalid swap params [2]',))]
+  fn test_handle_ununsed_invalid_to_token() {
+    let (clVault, _) = deploy_cl_vault();
+
+    let mut eth_route = get_eth_wst_route();
+    eth_route.percent = 1000000000000;
+    let swap_params = AvnuMultiRouteSwap {
+        token_from_address: eth_route.clone().token_from,
+        // got amont from trail and error 
+        token_from_amount: 2744 * pow::ten_pow(18) / 1000,
+        token_to_address: constants::STRK_ADDRESS(),
+        token_to_amount: 0,
+        token_to_min_amount: 0,
+        beneficiary: clVault.contract_address,
+        integrator_fee_amount_bps: 0,
+        integrator_fee_recipient: contract_address_const::<0x00>(),
+        routes: array![]
+    };
+    println!("swap params ready");
+    clVault.handle_unused(swap_params);
+  }
+
+  #[test]
+  #[fork("mainnet_latest")]
+  fn test_harvest_cl_vault() {
+    let (clVault, _) = deploy_cl_vault();
+    let ekubo_defi_spring = test_utils::deploy_defi_spring_ekubo();
+
+    // deposit
+    let amount = 10 * pow::ten_pow(18);
+    vault_init(amount);
+    ERC20Helper::approve(constants::ETH_ADDRESS(), clVault.contract_address, amount);
+    ERC20Helper::approve(constants::WST_ADDRESS(), clVault.contract_address, amount);
+    let _ = clVault.deposit(amount, amount, get_contract_address());
+
+    // harvest
+    let pre_bal_eth = ERC20Helper::balanceOf(constants::WST_ADDRESS(), clVault.contract_address);
+    let pre_bal_strk = ERC20Helper::balanceOf(constants::STRK_ADDRESS(), clVault.contract_address);
+    let fee_collector = contract_address_const::<0x123>();
+    let fee_pre = ERC20Helper::balanceOf(constants::WST_ADDRESS(), fee_collector);
+    let claim = Claim {
+      id: 0,
+      amount: pow::ten_pow(18).try_into().unwrap(),
+      claimee: clVault.contract_address,
+    };
+    let swap_params = STRKETHAvnuSwapInfo(claim.amount.into(), clVault.contract_address);
+    let proofs: Array<felt252> = array![1];
+    println!("harvesting");
+    clVault.harvest(ekubo_defi_spring.contract_address, claim, proofs.span(), swap_params);
+    let post_bal_eth = ERC20Helper::balanceOf(constants::WST_ADDRESS(), clVault.contract_address);
+    let post_bal_strk = ERC20Helper::balanceOf(constants::STRK_ADDRESS(), clVault.contract_address);
+    let fee_post = ERC20Helper::balanceOf(constants::WST_ADDRESS(), fee_collector);
+
+    assert(post_bal_eth > pre_bal_eth, 'eth not harvested');
+    assert(post_bal_strk == pre_bal_strk, 'strk not harvested');
+    assert(fee_post > fee_pre, 'fee not collected');
+  }
+  
+  fn STRKETHAvnuSwapInfo(
+    amount: u256, beneficiary: ContractAddress
+  ) -> AvnuMultiRouteSwap {
+    let additional1: Array<felt252> = array![
+      constants::STRK_ADDRESS().into(),
+      constants::ETH_ADDRESS().into(),
+      34028236692093847977029636859101184,
+      200,
+      0,
+      10000000000000000000000000000000000000000000000000000000000000000000000
+    ];
+
+    let additional2: Array<felt252> = array![
+      constants::WST_ADDRESS().into(),
+      constants::ETH_ADDRESS().into(),
+      34028236692093847977029636859101184,
+      200,
+      0,
+      10000000000000000000000000000000000000000000000000000000000000000000000
+    ];
+    let route = Route {
+        token_from: constants::STRK_ADDRESS(),
+        token_to: constants::ETH_ADDRESS(),
+        exchange_address: constants::EKUBO_CORE(),
+        percent: 1000000000000,
+        additional_swap_params: additional1.clone(),
+    };
+    let route2 = Route {
+      token_from: constants::ETH_ADDRESS(),
+      token_to: constants::WST_ADDRESS(),
+      exchange_address: constants::EKUBO_CORE(),
+      percent: 1000000000000,
+      additional_swap_params: additional2,
+  };
+    let routes: Array<Route> = array![route, route2];
+    let admin = get_contract_address();
+    AvnuMultiRouteSwap {
+        token_from_address: constants::STRK_ADDRESS(),
+        token_from_amount: amount, // claim amount
+        token_to_address: constants::WST_ADDRESS(),
+        token_to_amount: 0,
+        token_to_min_amount: 0,
+        beneficiary: beneficiary,
+        integrator_fee_amount_bps: 0,
+        integrator_fee_recipient: admin,
+        routes
+    }
   }
 }

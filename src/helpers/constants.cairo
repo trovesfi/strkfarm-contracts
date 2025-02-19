@@ -206,11 +206,11 @@ pub fn DNMM_STRK() -> ContractAddress {
 }
 
 pub fn EKUBO_USER_ADDRESS() -> ContractAddress {
-    contract_address_const::<0x04c0a5193d58f74fbace4b74dcf65481e734ed1714121bdc571da345540efa05>()
+    contract_address_const::<0x02545b2e5d519fc230e9cd781046d3a64e092114f07e44771e0d719d148725ef>()
 }
 
 pub fn WST_ADDRESS() -> ContractAddress {
-    contract_address_const::<0x042b8F0484674cA266AC5D08e4aC6A3fE65bd3129795DEF2dCA5c34ecC5F96d2>()
+    contract_address_const::<0x0057912720381Af14B0E5C87aa4718ED5E527eaB60B3801ebF702AB09139E38b>()
 }
 
 pub fn EKUBO_POSITIONS() -> ContractAddress {

@@ -51,8 +51,11 @@ mod VesuRebalance {
   #[abi(embed_v0)]
   impl CommonCompImpl = CommonComp::CommonImpl<ContractState>;
 
-  impl CommonInternalImpl = CommonComp::InternalImpl<ContractState>;
+  #[abi(embed_v0)]
+  impl RewardShareImpl = RewardShareComponent::RewardShareImpl<ContractState>;
   impl RewardShare = RewardShareComponent::InternalImpl<ContractState>;
+
+  impl CommonInternalImpl = CommonComp::InternalImpl<ContractState>;
   impl ERC4626InternalImpl = ERC4626Component::InternalImpl<ContractState>;
   impl ERC20InternalImpl = ERC20Component::InternalImpl<ContractState>;
   impl ReentrancyGuardInternalImpl = ReentrancyGuardComponent::InternalImpl<ContractState>;
@@ -310,6 +313,7 @@ mod VesuRebalance {
       proof: Span<felt252>, 
       swapInfo: AvnuMultiRouteSwap
     ) {
+      self.common.assert_not_paused();
       let vesuSettings = SNFStyleClaimSettings {
         rewardsContract: rewardsContract,
       };

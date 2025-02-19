@@ -37,14 +37,26 @@ mod interfaces {
 }
 
 mod strategies {
-    pub mod vesu_rebalance {
-        pub mod interface;
-        pub mod test;
-        pub mod vesu_rebalance;
-    }
+    // pub mod vesu_rebalance {
+    //     pub mod interface;
+    //     pub mod vesu_rebalance;
+    //     #[cfg(test)]
+    //     pub mod test;
+    // }
     pub mod cl_vault {
         pub mod interface;
-        pub mod test;
         pub mod cl_vault;
+        #[cfg(test)]
+        pub mod test;
     }
+}
+
+#[cfg(test)]
+pub mod tests {
+    pub mod utils;
+}
+
+pub mod mocks {
+    pub mod defi_spring_snf;
+    pub mod defi_spring_ekubo;
 }

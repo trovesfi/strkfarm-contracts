@@ -38,7 +38,6 @@ pub struct Settings {
   pub default_pool_index: u8,
   pub fee_percent: u32,
   pub fee_receiver: ContractAddress,
-  pub emergency_address: ContractAddress
 }
 
 #[starknet::interface]
@@ -55,7 +54,7 @@ pub trait IVesuRebal<TContractState> {
     proof: Span<felt252>, 
     swapInfo: AvnuMultiRouteSwap
   );
-  
+
   // =================
   // @audit below set of functions ton be internal
   // ===============
