@@ -13,9 +13,10 @@ pub mod test_vesu_rebalance {
   use strkfarm_contracts::components::ekuboSwap::{
     EkuboSwapStruct, ekuboSwapImpl
   };
+  use strkfarm_contracts::tests::utils as test_utils;
   use strkfarm_contracts::helpers::ERC20Helper;
   use strkfarm_contracts::helpers::pow;
-  use strkfarm_contracts::strategies::vesu_rebalance::interface::{PoolProps, Settings, BorrowSettings, Action, Feature};
+  use strkfarm_contracts::strategies::vesu_rebalance::interface::{PoolProps, Settings, Action, Feature};
   use strkfarm_contracts::components::vesu::{vesuStruct, vesuToken, vesuSettingsImpl};
   use strkfarm_contracts::interfaces::IVesu::{IStonDispatcher, IStonDispatcherTrait};
   use strkfarm_contracts::strategies::vesu_rebalance::interface::{IVesuRebalDispatcher, IVesuRebalDispatcherTrait};
@@ -56,14 +57,6 @@ pub mod test_vesu_rebalance {
     }
   }
 
-  fn get_borrow_settings() -> BorrowSettings {
-    BorrowSettings {
-      is_borrowing_allowed: false,
-      min_health_factor: 10,
-      target_health_factor: 20
-    }
-  }
-
   fn get_vesu_settings() -> vesuStruct {
     vesuStruct {
       singleton: IStonDispatcher{
@@ -77,17 +70,15 @@ pub mod test_vesu_rebalance {
   }
 
   fn deploy_vesu_vault() -> (ContractAddress, IVesuRebalDispatcher, IERC4626Dispatcher) {
+    let accessControl = test_utils::deploy_access_control();
     let vesu_rebal = declare("VesuRebalance").unwrap().contract_class();
-    let admin = get_contract_address();
     let allowed_pools = get_allowed_pools();
     let settings = get_settings();
-    let borrow_settings = get_borrow_settings();
     let vesu_settings = get_vesu_settings();
     let mut calldata: Array<felt252> = array![constants::STRK_ADDRESS().into()];
-    calldata.append(admin.into());
+    calldata.append(accessControl.into());
     allowed_pools.serialize(ref calldata);
     settings.serialize(ref calldata);
-    borrow_settings.serialize(ref calldata);
     vesu_settings.serialize(ref calldata);
 
     let (address, _) = vesu_rebal.deploy(@calldata).expect('Vesu vault deploy failed');
@@ -116,7 +107,7 @@ pub mod test_vesu_rebalance {
   }
 
   #[test]
-  #[fork("mainnet_latest")]
+  #[fork("mainnet_1134787")]
   fn test_vesu_deposit() {
     let amount = 1000 * pow::ten_pow(18);
     let this = get_contract_address();
@@ -149,7 +140,6 @@ pub mod test_vesu_rebalance {
     let v_token_bal = ERC20Helper::balanceOf(v_token, vesu_address);
     let pool_assets = IERC4626Dispatcher {contract_address: v_token}
     .convert_to_assets(v_token_bal);
-    println!("pool_assets {:?}", pool_assets);
     // assert(pool_assets == 1499999999999999999998, 'invalid asset deposited');
     let prev_index_after = vesu_vault.get_previous_index();
     // assert(prev_index_after != prev_index_before, 'index not updated');
@@ -228,8 +218,6 @@ pub mod test_vesu_rebalance {
     let allowed_pools = get_allowed_pools();
 
     // genesis as default pool
-    println!("DEPOSIT TO GENESIS POOL");
-    println!("");
     let _ = vesu_erc4626.deposit(amount, this);
     // change default pool 
     let new_settings = Settings {
@@ -241,8 +229,6 @@ pub mod test_vesu_rebalance {
     assert(vesu_vault.get_settings().default_pool_index == 3, 'invalid index set');
 
     // deposit to new default pool
-    println!("DEPOSIT TO RE7 USDC POOL");
-    println!("");
     let amount = 1000 * pow::ten_pow(18);
     ERC20Helper::approve(constants::STRK_ADDRESS(), vesu_address, amount);
     let _ = vesu_erc4626.deposit(amount, this);
@@ -293,9 +279,6 @@ pub mod test_vesu_rebalance {
     actions.append(action4);
 
     // REBALANCE START
-    println!("REBALANCE START");
-    println!("");
-
     vesu_vault.rebalance(actions);
 
     let allowed_pools = get_allowed_pools();
@@ -326,8 +309,6 @@ pub mod test_vesu_rebalance {
     let allowed_pools = get_allowed_pools();
 
     // genesis as default pool
-    println!("DEPOSIT TO GENESIS POOL");
-    println!("");
     let _ = vesu_erc4626.deposit(amount, this);
 
     // change default pool 
@@ -340,8 +321,6 @@ pub mod test_vesu_rebalance {
     assert(vesu_vault.get_settings().default_pool_index == 1, 'invalid index set');
 
     // deposit to new default pool
-    println!("DEPOSIT TO RE7 XSTRK POOL");
-    println!("");
     let amount = 2000 * pow::ten_pow(18);
     ERC20Helper::approve(constants::STRK_ADDRESS(), vesu_address, amount);
     let _ = vesu_erc4626.deposit(amount, this);
@@ -356,8 +335,6 @@ pub mod test_vesu_rebalance {
     assert(vesu_vault.get_settings().default_pool_index == 2, 'invalid index set');
 
     // deposit to new default pool
-    println!("DEPOSIT TO RE7 SSTRK POOL");
-    println!("");
     let amount = 1000 * pow::ten_pow(18);
     ERC20Helper::approve(constants::STRK_ADDRESS(), vesu_address, amount);
     let _ = vesu_erc4626.deposit(amount, this);
@@ -381,16 +358,13 @@ pub mod test_vesu_rebalance {
     actions.append(action2);
 
     // REBALANCE START
-    println!("REBALANCE START");
-    println!("");
- 
     vesu_vault.rebalance(actions);
   }
 
   #[test]
-  #[should_panic(expected: ('Max weight exceede',))]
+  #[should_panic(expected: ('Access: Missing relayer role',))]
   #[fork("mainnet_latest")]
-  fn test_vesu_rebalance_should_fail_weights() {
+  fn test_vesu_rebalance_should_fail_relayer_role() {
     let amount = 5000 * pow::ten_pow(18);
     let this = get_contract_address();
     let vesu_settings = get_vesu_settings(); 
@@ -401,8 +375,6 @@ pub mod test_vesu_rebalance {
     let allowed_pools = get_allowed_pools();
 
     // genesis as default pool
-    println!("DEPOSIT TO GENESIS POOL");
-    println!("");
     let _ = vesu_erc4626.deposit(amount, this);
     // change default pool 
     let new_settings = Settings {
@@ -414,11 +386,17 @@ pub mod test_vesu_rebalance {
     assert(vesu_vault.get_settings().default_pool_index == 3, 'invalid index set');
 
     // deposit to new default pool
-    println!("DEPOSIT TO RE7 USDC POOL");
-    println!("");
     let amount = 1000 * pow::ten_pow(18);
     ERC20Helper::approve(constants::STRK_ADDRESS(), vesu_address, amount);
     let _ = vesu_erc4626.deposit(amount, this);
+
+    // current average yield of vault is 4%
+    // REBALANCE 
+    // action 1 : withdraw 2500 strk from genesis pool 
+    // action 2 : withdraw 1000 strk from RE7 USDC pool
+    // action 3 : deposit 2000 strk to RE7 XSTRK pool  
+    // action 3 : deposit 1500 strk to RE7 SSTRK pool  
+    // current average yield of vault becomes ~10%
 
     let mut actions: Array<Action> = array![]; 
     // Action 1 
@@ -426,44 +404,40 @@ pub mod test_vesu_rebalance {
       pool_id: constants::VESU_GENESIS_POOL().into(),
       feature: Feature::WITHDRAW,
       token: constants::STRK_ADDRESS(),
-      amount: 1500 * pow::ten_pow(18)
+      amount: 2500 * pow::ten_pow(18)
     };
     actions.append(action1);
 
+    // Action 2 
     let action2 = Action {
-      pool_id: constants::RE7_SSTRK_POOL().into(),
+      pool_id: constants::RE7_USDC_POOL().into(),
       feature: Feature::WITHDRAW,
       token: constants::STRK_ADDRESS(),
-      amount: 1500 * pow::ten_pow(18)
+      amount: 1000 * pow::ten_pow(18)
     };
     actions.append(action2);
 
+    // Action 3 
     let action3 = Action {
       pool_id: constants::RE7_XSTRK_POOL().into(),
       feature: Feature::DEPOSIT,
       token: constants::STRK_ADDRESS(),
-      amount: 3000 * pow::ten_pow(18)
+      amount: 2000 * pow::ten_pow(18)
     };
     actions.append(action3);
 
-    let allowed_pools = get_allowed_pools();
-    let mut i = 0;
-    loop {
-      if i == allowed_pools.len() {
-        break;
-      }
-      let v_token_bal = ERC20Helper::balanceOf(*allowed_pools.at(i).v_token, vesu_address);
-      let assets = IERC4626Dispatcher {contract_address: *allowed_pools.at(i).v_token}
-      .convert_to_assets(v_token_bal);
-      println!("strk per pool {:?}", assets);
-      i += 1;
+    // Action 4 
+    let action4 = Action {
+      pool_id: constants::RE7_SSTRK_POOL().into(),
+      feature: Feature::DEPOSIT,
+      token: constants::STRK_ADDRESS(),
+      amount: 1500 * pow::ten_pow(18)
     };
+    actions.append(action4);
 
     // REBALANCE START
-    println!("REBALANCE START");
-    println!("");
- 
-    vesu_vault.rebalance(actions);
-
+    start_cheat_caller_address(vesu_address, constants::USER2_ADDRESS());
+    vesu_vault.rebalance_weights(actions);
+    stop_cheat_caller_address(vesu_address);
   }
 }

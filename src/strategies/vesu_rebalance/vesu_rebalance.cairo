@@ -24,7 +24,7 @@ mod VesuRebalance {
     ERC20Component,
     ERC20HooksEmptyImpl
   };
-  use openzeppelin::token::erc20::interface::IERC20;
+  use openzeppelin::token::erc20::interface::IERC20Mixin;
   use strkfarm_contracts::components::erc4626::{ERC4626Component};
   use strkfarm_contracts::components::erc4626::ERC4626Component::{FeeConfigTrait, LimitConfigTrait, ERC4626HooksTrait, ImmutableConfig};
   use alexandria_storage::list::{List, ListTrait};
@@ -60,12 +60,16 @@ mod VesuRebalance {
   impl ERC20InternalImpl = ERC20Component::InternalImpl<ContractState>;
   impl ReentrancyGuardInternalImpl = ReentrancyGuardComponent::InternalImpl<ContractState>;
 
-  use strkfarm_contracts::strategies::vesu_rebalance::interface::{IVesuRebal, Action, Feature, BorrowSettings, PoolProps, Settings};
+  use strkfarm_contracts::strategies::vesu_rebalance::interface::{IVesuRebal, Action, Feature, PoolProps, Settings};
 
   pub mod Errors {
     pub const INVALID_YIELD: felt252 = 'Insufficient yield';
+    pub const INVALID_POOL_ID: felt252 = 'Invalid pool id';
+    pub const INVALID_V_TOKENS: felt252 = 'not enoungh v_tokens';
+    pub const INVALID_BALANCE: felt252 = 'remaining amount should be zero';
     pub const UNUTILIZED_ASSET: felt252 = 'Unutilized asset in vault';
     pub const MAX_WEIGHT_EXCEEDED: felt252 = 'Max weight exceeded';
+    pub const POOL_LIMIT_EXCEEDED: felt252 = 'pool limit exceeded';
     pub const BORROWING_ENABLED: felt252 = 'Borrowing is enabled';
     pub const V_TOKEN_BAL_ZERO: felt252 = 'Vault vToken bal zero';
     pub const FEE_CANNOT_BE_ZERO: felt252 = 'Fee cannot be zero';
@@ -142,7 +146,6 @@ mod VesuRebalance {
     access_control: ContractAddress,
     allowed_pools: Array<PoolProps>,
     settings: Settings,
-    borrow_settings: BorrowSettings,
     vesu_settings: vesuStruct,
   ) {
     self.erc4626.initializer(asset);
@@ -528,7 +531,7 @@ mod VesuRebalance {
       let mut i = 0;
       let mut v_token = allowed_pools.at(i).v_token;
       loop {
-        assert(i != allowed_pools.len(), 'invalid pool id passed');
+        assert(i != allowed_pools.len(), Errors::INVALID_POOL_ID);
         if *allowed_pools.at(i).pool_id == action.pool_id {
           v_token = allowed_pools.at(i).v_token;
           break;
@@ -544,8 +547,8 @@ mod VesuRebalance {
         Feature::WITHDRAW => {
           let max_withdraw_vault = self._calculate_max_withdraw(*v_token);
           let max_withdraw_pool = self._calculate_max_withdraw_pool(action.pool_id, action.token);
-          assert(action.amount <= max_withdraw_vault, 'not enoungh v_tokens');
-          assert(action.amount < max_withdraw_pool, 'pool limit exceded');
+          assert(action.amount <= max_withdraw_vault, Errors::INVALID_V_TOKENS);
+          assert(action.amount < max_withdraw_pool, Errors::POOL_LIMIT_EXCEEDED);
           IERC4626Dispatcher {contract_address: *v_token}.withdraw(
             action.amount,
             this,
@@ -587,7 +590,7 @@ mod VesuRebalance {
 
     fn _get_user_shares(self: @ContractState, action_type: Feature, caller: ContractAddress, shares: u256) -> u256 {
       let this = get_contract_address();
-      let bal = ERC20Helper::balanceOf(this, caller);
+      let bal = self.balance_of(caller);
       match action_type {
         Feature::DEPOSIT => {
           return bal + shares;
@@ -595,7 +598,8 @@ mod VesuRebalance {
         Feature::WITHDRAW => {
           return bal - shares;
         }
-      }
+      };
+      return 0;
     }
 
     fn _emergency_withdraw(ref self: ContractState) {
@@ -706,7 +710,7 @@ mod VesuRebalance {
   }
 
   #[abi(embed_v0)]
-  impl VesuERC20Impl of IERC20<ContractState> {
+  impl VesuERC20Impl of IERC20Mixin<ContractState> {
     fn total_supply(self: @ContractState) -> u256 {
       let unminted_shares = self.reward_share.get_total_unminted_shares();
       let total_supply: u256 = self.erc20.total_supply() + unminted_shares.try_into().unwrap();
@@ -715,8 +719,10 @@ mod VesuRebalance {
     }
 
     fn balance_of(self: @ContractState, account: ContractAddress) -> u256 {
-      self.erc20.balance_of(account)
+      let (additional_shares, _, _) = self.reward_share.get_additional_shares(account);
+      self.erc20.balance_of(account) + additional_shares.into()
     }
+    
     fn allowance(self: @ContractState, owner: ContractAddress, spender: ContractAddress) -> u256 {
       self.erc20.allowance(owner, spender)
     }
@@ -730,6 +736,32 @@ mod VesuRebalance {
     }
     fn approve(ref self: ContractState, spender: ContractAddress, amount: u256) -> bool {
       self.erc20.approve(spender, amount)
+    }
+
+    fn name(self: @ContractState) -> ByteArray {
+      self.erc20.name()
+    }
+
+    fn symbol(self: @ContractState) -> ByteArray {
+      self.erc20.symbol()
+    }
+
+    fn decimals(self: @ContractState) -> u8 {
+      self.erc20.decimals()
+    }
+
+    fn totalSupply(self: @ContractState) -> u256 {
+      self.total_supply()
+    }
+
+    fn balanceOf(self: @ContractState, account: ContractAddress) -> u256 {
+      self.balance_of(account)
+    }
+
+    fn transferFrom(
+        ref self: ContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256,
+    ) -> bool {
+      self.transfer_from(sender, recipient, amount)
     }
   }
 
@@ -847,7 +879,7 @@ mod VesuRebalance {
         i += 1;
       };
 
-      assert(remaining_amount == 0, 'remaining amount should be zero');
+      assert(remaining_amount == 0, Errors::INVALID_BALANCE);
 
       if (contract_state.is_incentives_on.read()) {
         let user_shares = contract_state._get_user_shares(Feature::WITHDRAW, caller, shares);

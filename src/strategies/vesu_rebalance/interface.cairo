@@ -26,13 +26,6 @@ pub struct PoolProps {
 }
 
 #[derive(Drop, Copy, Serde, starknet::Store)]
-pub struct BorrowSettings {
-  pub is_borrowing_allowed: bool,
-  pub min_health_factor: u32,
-  pub target_health_factor: u32,
-}
-
-#[derive(Drop, Copy, Serde, starknet::Store)]
 // vault general settings
 pub struct Settings {
   pub default_pool_index: u8,
