@@ -14,7 +14,6 @@ pub mod DefiSpringEkuboMock {
     #[abi(embed_v0)]
     pub impl DefiSpringEkuboMockImpl of IEkuboDistributor<ContractState> {
         fn claim(ref self: ContractState, claim: Claim, proof: Span<felt252>) -> bool {
-            println!("Claiming {} STRK", claim.amount);   
             ERC20Helper::transfer(constants::STRK_ADDRESS(), claim.claimee, claim.amount.into());
             return true;
         }
