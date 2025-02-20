@@ -662,7 +662,7 @@ mod VesuRebalance {
     }
 
     fn max_withdraw(self: @ContractState, owner: starknet::ContractAddress) -> u256 {
-      self.erc4626.max_withdraw(owner)
+      self.erc4626.max_withdraw(owner) 
     }
 
     fn mint(ref self: ContractState, shares: u256, receiver: starknet::ContractAddress) -> u256 {
@@ -816,6 +816,7 @@ mod VesuRebalance {
           contract_state.erc20.total_supply().try_into().unwrap()
         );
         // @audit_vt need to mint additional shares on user
+        contract_state.erc20.mint(caller, additional_shares.try_into().unwrap());
       }
     }
 
@@ -850,36 +851,33 @@ mod VesuRebalance {
         assets
       );
 
-      if (default_pool_withdrawn == assets) {
-        return;
+      if (default_pool_withdrawn < assets) {
+        // case 2: withdraw remaining from other pools
+        let mut remaining_amount = assets - default_pool_withdrawn;
+        let mut i = 0;
+        loop {
+          if i == pool_ids_array.len() {
+            break;
+          }
+          if i == default_id.into() {
+            continue;
+          }
+          
+          // @audit if pool is paused/shutdown mode, skip this pool
+          
+          let withdrawn_amount = contract_state._perform_withdraw_max_possible(
+            *pool_ids_array.at(i).pool_id,
+            *pool_ids_array.at(i).v_token,
+            remaining_amount
+          );
+          remaining_amount -= withdrawn_amount;
+          if (remaining_amount == 0) {
+            break;
+          }
+          i += 1;
+        };
+        assert(remaining_amount == 0, Errors::INVALID_BALANCE);
       }
-
-      // case 2: withdraw remaining from other pools
-      let mut remaining_amount = assets - default_pool_withdrawn;
-      let mut i = 0;
-      loop {
-        if i == pool_ids_array.len() {
-          break;
-        }
-        if i == default_id.into() {
-          continue;
-        }
-        
-        // @audit if pool is paused/shutdown mode, skip this pool
-
-        let withdrawn_amount = contract_state._perform_withdraw_max_possible(
-          *pool_ids_array.at(i).pool_id,
-          *pool_ids_array.at(i).v_token,
-          remaining_amount
-        );
-        remaining_amount -= withdrawn_amount;
-        if (remaining_amount == 0) {
-          break;
-        }
-        i += 1;
-      };
-
-      assert(remaining_amount == 0, Errors::INVALID_BALANCE);
 
       if (contract_state.is_incentives_on.read()) {
         let user_shares = contract_state._get_user_shares(Feature::WITHDRAW, caller, shares);
@@ -891,8 +889,8 @@ mod VesuRebalance {
           pending_round_points,
           contract_state.erc20.total_supply().try_into().unwrap()
         );
-
         // @audit_vt need to mint additional shares on user
+        contract_state.erc20.mint(caller, additional_shares.try_into().unwrap());
       }
     }
   }
@@ -905,6 +903,7 @@ mod VesuRebalance {
     }
 
     fn after_update(ref self: ContractState, token: ContractAddress, amount: u256) {
+      let shares = self.convert_to_shares(amount);
       let fee = (amount * self.settings.fee_percent.read().into()) / 10000;
       if (fee > 0) {
         let fee_receiver = self.settings.fee_receiver.read();
@@ -918,6 +917,11 @@ mod VesuRebalance {
       let v_token = *pool_ids_array.at(default_pool_index.into()).v_token;
       ERC20Helper::approve(self.asset(), v_token, amt);
       IERC4626Dispatcher {contract_address: v_token}.deposit(amt, get_contract_address());
+
+      let total_shares = self.total_supply();
+      self
+      .reward_share
+        .update_harvesting_rewards(amount.try_into().unwrap(), shares.try_into().unwrap(), total_shares.try_into().unwrap());
     }
   }
 }

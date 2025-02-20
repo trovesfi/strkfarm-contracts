@@ -10,6 +10,9 @@ use starknet::{ContractAddress, get_contract_address};
 use strkfarm_contracts::interfaces::IEkuboDistributor::{
     IEkuboDistributor, IEkuboDistributorDispatcher, IEkuboDistributorDispatcherTrait, Claim
 };
+use strkfarm_contracts::components::harvester::defi_spring_default_style::{
+    ISNFClaimTraitDispatcher, ISNFClaimTraitDispatcherTrait
+};
 use strkfarm_contracts::helpers::constants;
 use strkfarm_contracts::helpers::ERC20Helper;
 use strkfarm_contracts::helpers::pow;
@@ -38,6 +41,17 @@ pub fn deploy_defi_spring_ekubo() -> IEkuboDistributorDispatcher {
     // load strk into the contract
     load_strk(address);
     return IEkuboDistributorDispatcher { contract_address: address };
+}
+
+pub fn deploy_snf_spring_ekubo() -> ISNFClaimTraitDispatcher {
+    let cls = declare("DefiSpringSNFMock").unwrap().contract_class();
+
+    let mut calldata: Array<felt252> = array![];
+    let (address, _) = cls.deploy(@calldata).expect('DefiSpringSNF deploy failed');
+
+    // load strk into the contract
+    load_strk(address);
+    return ISNFClaimTraitDispatcher { contract_address: address };
 }
 
 pub fn load_strk(user: ContractAddress) {

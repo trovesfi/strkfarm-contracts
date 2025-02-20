@@ -256,8 +256,8 @@ pub mod ERC4626Component {
             match Limit::withdraw_limit(self, owner) {
                 Option::Some(limit) => limit,
                 Option::None => {
-                    let erc20_component = get_dep_component!(self, ERC20);
-                    let owner_bal = erc20_component.balance_of(owner);
+                    let mut erc20_disp = IERC20Dispatcher {contract_address: starknet::get_contract_address()};
+                    let owner_bal = erc20_disp.balance_of(owner);
                     self._convert_to_assets(owner_bal, Rounding::Floor)
                 }
             }
@@ -301,8 +301,8 @@ pub mod ERC4626Component {
             match Limit::redeem_limit(self, owner) {
                 Option::Some(limit) => limit,
                 Option::None => {
-                    let erc20_component = get_dep_component!(self, ERC20);
-                    erc20_component.balance_of(owner)
+                    let mut erc20_disp = IERC20Dispatcher {contract_address: starknet::get_contract_address()};
+                    erc20_disp.balance_of(owner)
                 }
             }
         }

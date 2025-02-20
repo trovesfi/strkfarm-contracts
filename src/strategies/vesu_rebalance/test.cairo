@@ -15,12 +15,16 @@ pub mod test_vesu_rebalance {
   };
   use strkfarm_contracts::tests::utils as test_utils;
   use strkfarm_contracts::helpers::ERC20Helper;
+  use strkfarm_contracts::components::swap::{AvnuMultiRouteSwap, Route};
   use strkfarm_contracts::helpers::pow;
   use strkfarm_contracts::strategies::vesu_rebalance::interface::{PoolProps, Settings, Action, Feature};
   use strkfarm_contracts::components::vesu::{vesuStruct, vesuToken, vesuSettingsImpl};
   use strkfarm_contracts::interfaces::IVesu::{IStonDispatcher, IStonDispatcherTrait};
+  use openzeppelin::token::erc20::interface::{IERC20MixinDispatcher, IERC20MixinDispatcherTrait};
   use strkfarm_contracts::strategies::vesu_rebalance::interface::{IVesuRebalDispatcher, IVesuRebalDispatcherTrait};
   use strkfarm_contracts::interfaces::IERC4626::{IERC4626, IERC4626Dispatcher, IERC4626DispatcherTrait};
+  use strkfarm_contracts::interfaces::IEkuboDistributor::{Claim};
+  use strkfarm_contracts::components::harvester::reward_shares::{IRewardShareDispatcher, IRewardShareDispatcherTrait};
   use openzeppelin::utils::serde::SerializedAppend;
 
   fn get_allowed_pools() -> Array<PoolProps>{
@@ -439,5 +443,148 @@ pub mod test_vesu_rebalance {
     start_cheat_caller_address(vesu_address, constants::USER2_ADDRESS());
     vesu_vault.rebalance_weights(actions);
     stop_cheat_caller_address(vesu_address);
+  }
+
+  #[test]
+  #[fork("mainnet_1134787")]
+  fn test_vesu_harvest_and_withdraw() {
+    // Deploy the mock DefiSpringSNF contract
+    let snf_defi_spring = test_utils::deploy_snf_spring_ekubo();
+    let amount = 1000 * pow::ten_pow(18);
+
+    let (vesu_address, vesu_vault, vesu_erc4626) = deploy_vesu_vault();
+
+    // User 1 deposits
+    let block = 100;
+    start_cheat_block_number_global(block);
+    let user1 = constants::TestUserStrk();
+    let bal = ERC20Helper::balanceOf(constants::STRK_ADDRESS(), user1);
+    println!("bal {:?}", bal);
+    start_cheat_caller_address(constants::STRK_ADDRESS(), user1);
+    ERC20Helper::approve(constants::STRK_ADDRESS(), vesu_address, amount);
+    stop_cheat_caller_address(constants::STRK_ADDRESS());
+    start_cheat_caller_address(vesu_address, user1);
+    let _ = vesu_erc4626.deposit(amount, user1);
+    let reward_disp = IRewardShareDispatcher {contract_address: vesu_address};
+    let (additional, last_block, pending_round_points) = reward_disp.get_additional_shares(get_contract_address());
+    assert(additional == 0, 'invalid additional shares');
+    assert(last_block == block, 'invalid last block');
+    assert(pending_round_points == 0, 'invalid pending round points');
+    stop_cheat_caller_address(vesu_address);
+    println!("user 1 deposit");
+
+    // Advance time by 100 blocks
+    // User 2 deposits
+    let block = block + 100;
+    start_cheat_block_number_global(block);
+    let user2 = constants::TestUserStrk3();
+    start_cheat_caller_address(constants::STRK_ADDRESS(), user2);
+    ERC20Helper::approve(constants::STRK_ADDRESS(), vesu_address, amount);
+    stop_cheat_caller_address(constants::STRK_ADDRESS());
+    start_cheat_caller_address(vesu_address, user2);
+    ERC20Helper::approve(constants::STRK_ADDRESS(), vesu_address, amount);
+    let _ = vesu_erc4626.deposit(amount, user2);
+    let (additional, last_block, pending_round_points) = reward_disp.get_additional_shares(get_contract_address());
+    assert(additional == 0, 'invalid additional shares');
+    assert(last_block == block, 'invalid last block');
+    stop_cheat_caller_address(vesu_address);
+    println!("user 2 deposit");
+
+    // Advance time by another 100 block
+    // Harvest rewards from the mock DefiSpringSNF contract
+    let block = block + 100;
+    start_cheat_block_number_global(block);
+    let claim = Claim {
+      id: 0,
+      amount: pow::ten_pow(18).try_into().unwrap(),
+      claimee: vesu_address
+    };
+    let swap_params = STRKETHAvnuSwapInfo(claim.amount.into(), vesu_address);
+    let proofs: Array<felt252> = array![1];
+    vesu_vault.harvest(snf_defi_spring.contract_address, claim, proofs.span(), swap_params);
+    println!("harvest done");
+
+    // Check total shares and rewards
+    let erc20_disp = IERC20MixinDispatcher {contract_address: vesu_address};
+    let total_shares = erc20_disp.total_supply();
+    let user1_shares = erc20_disp.balance_of(user1);
+    let user2_shares = erc20_disp.balance_of(user2);
+
+    println!("total shares {:?}", total_shares);
+    println!("user1 shares {:?}", user1_shares);
+    println!("user2 shares {:?}", user2_shares);
+    
+    assert(total_shares > (amount * 2), 'shares should include rewards');
+    assert(user1_shares > user2_shares, 'must have more shares');
+
+    // Withdraw 100% from User 1
+    start_cheat_caller_address(vesu_address, user1);
+    let user1_assets = vesu_erc4626.convert_to_assets(user1_shares);
+    let _ = vesu_erc4626.withdraw(user1_assets - 1, user1, user1);
+    stop_cheat_caller_address(vesu_address);
+
+    // Check User 1 balance after withdrawal
+    let user1_balance = ERC20Helper::balanceOf(constants::STRK_ADDRESS(), user1);
+    assert(user1_balance > amount, 'deposit should include rewards');
+
+    // Withdraw 100% from User 2
+    start_cheat_caller_address(vesu_address, user2);
+    let user2_assets = vesu_erc4626.convert_to_assets(user2_shares);
+    let withdraw_amt = user2_assets - (user2_assets / 10); 
+    let _ = vesu_erc4626.withdraw(withdraw_amt, user2, user2);
+    stop_cheat_caller_address(vesu_address);
+
+    // Check User 2 balance after withdrawal
+    let user2_balance = ERC20Helper::balanceOf(constants::STRK_ADDRESS(), user2);
+    assert(user2_balance > amount, 'deposit should include rewards');
+  }
+
+  fn STRKETHAvnuSwapInfo(
+    amount: u256, beneficiary: ContractAddress
+    ) -> AvnuMultiRouteSwap {
+    let additional1: Array<felt252> = array![
+      constants::STRK_ADDRESS().into(),
+      constants::ETH_ADDRESS().into(),
+      34028236692093847977029636859101184,
+      200,
+      0,
+      10000000000000000000000000000000000000000000000000000000000000000000000
+    ];
+
+    let additional2: Array<felt252> = array![
+      constants::WST_ADDRESS().into(),
+      constants::ETH_ADDRESS().into(),
+      34028236692093847977029636859101184,
+      200,
+      0,
+      10000000000000000000000000000000000000000000000000000000000000000000000
+    ];
+    let route = Route {
+        token_from: constants::STRK_ADDRESS(),
+        token_to: constants::ETH_ADDRESS(),
+        exchange_address: constants::EKUBO_CORE(),
+        percent: 1000000000000,
+        additional_swap_params: additional1.clone(),
+    };
+    let route2 = Route {
+      token_from: constants::ETH_ADDRESS(),
+      token_to: constants::WST_ADDRESS(),
+      exchange_address: constants::EKUBO_CORE(),
+      percent: 1000000000000,
+      additional_swap_params: additional2,
+    };
+    let routes: Array<Route> = array![route, route2];
+    let admin = get_contract_address();
+    AvnuMultiRouteSwap {
+        token_from_address: constants::STRK_ADDRESS(),
+        token_from_amount: amount, // claim amount
+        token_to_address: constants::WST_ADDRESS(),
+        token_to_amount: 0,
+        token_to_min_amount: 0,
+        beneficiary: beneficiary,
+        integrator_fee_amount_bps: 0,
+        integrator_fee_recipient: admin,
+        routes
+    }
   }
 }

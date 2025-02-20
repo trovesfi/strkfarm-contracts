@@ -29,57 +29,57 @@ coverage = "snforge test --save-trace-data --rerun-failed && snforge test --cove
 
 [[tool.snforge.fork]]
 name = "mainnet_latest"
-url = "$RPC_URL"
+url = "https://starknet-mainnet.public.blastapi.io/rpc/v0_7"
 block_id.tag = "latest"
 
 [[tool.snforge.fork]]
 name = "mainnet_846087"
-url = "$RPC_URL"
+url = "https://starknet-mainnet.public.blastapi.io/rpc/v0_7"
 block_id.number = "846087"
 
 [[tool.snforge.fork]]
 name = "mainnet_630393"
-url = "$RPC_URL"
+url = "https://starknet-mainnet.public.blastapi.io/rpc/v0_7"
 block_id.number = "630393"
 
 [[tool.snforge.fork]]
 name = "mainnet_660943"
-url = "$RPC_URL"
+url = "https://starknet-mainnet.public.blastapi.io/rpc/v0_7"
 block_id.number = "660943"
 
 [[tool.snforge.fork]]
 name = "mainnet_661452"
-url = "$RPC_URL"
+url = "https://starknet-mainnet.public.blastapi.io/rpc/v0_7"
 block_id.number = "661452"
 
 [[tool.snforge.fork]]
 name = "mainnet_usdc_large"
-url = "$RPC_URL"
+url = "https://starknet-mainnet.public.blastapi.io/rpc/v0_7"
 block_id.number = "648429"
 
 [[tool.snforge.fork]]
 name = "mainnet_671812"
-url = "$RPC_URL"
+url = "https://starknet-mainnet.public.blastapi.io/rpc/v0_7"
 block_id.number = "671812"
 
 [[tool.snforge.fork]]
 name = "mainnet_1078313"
-url = "$RPC_URL"
+url = "https://starknet-mainnet.public.blastapi.io/rpc/v0_7"
 block_id.number = "1078313"
 
 [[tool.snforge.fork]]
 name = "mainnet_1025136"
-url = "$RPC_URL"
+url = "https://starknet-mainnet.public.blastapi.io/rpc/v0_7"
 block_id.number = "1025136"
 
 [[tool.snforge.fork]]
 name = "mainnet_971311"
-url = "$RPC_URL"
+url = "https://starknet-mainnet.public.blastapi.io/rpc/v0_7"
 block_id.number = "971311"
 
 [[tool.snforge.fork]]
 name = "mainnet_1134787"
-url = "$RPC_URL"
+url = "https://starknet-mainnet.public.blastapi.io/rpc/v0_7"
 block_id.number = "1134787"
 
 [profile.dev.cairo]

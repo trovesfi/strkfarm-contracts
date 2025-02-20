@@ -97,7 +97,7 @@ pub fn TEST_VESU_USER() -> ContractAddress {
 }
 
 pub fn TestUserStrk() -> ContractAddress {
-    contract_address_const::<0x07f42b04f7a511a3101c9831d78b0b586e551ba89f41cf71d7e8287c90d9b4f3>()
+    contract_address_const::<0x00ca1702e64c81d9a07b86bd2c540188d92a2c73cf5cc0e508d949015e7e84a7>()
 }
 
 pub fn TestUserStrk2() -> ContractAddress {
