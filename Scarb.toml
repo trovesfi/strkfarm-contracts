@@ -1,0 +1,93 @@
+[package]
+name = "strkfarm_contracts"
+version = "0.1.0"
+edition = "2023_11"
+
+# See more keys and their definitions at https://docs.swmansion.com/scarb/docs/reference/manifest.html
+
+[dependencies]
+alexandria_math = { git = "https://github.com/keep-starknet-strange/alexandria.git", rev = "475eaf015f4e997cff8ec31a5e7b4ab3f9a86e32" } # later change to 2.9.2
+alexandria_storage = { git = "https://github.com/keep-starknet-strange/alexandria.git", rev = "475eaf015f4e997cff8ec31a5e7b4ab3f9a86e32" }
+alexandria_data_structures = { git = "https://github.com/keep-starknet-strange/alexandria.git", rev = "475eaf015f4e997cff8ec31a5e7b4ab3f9a86e32" }
+openzeppelin = "0.18.0"
+openzeppelin_introspection = "0.18.0"
+ekubo = { git = "https://github.com/EkuboProtocol/abis.git", branch = "main"}
+# lst = { path = "../kSTRK/lst" }
+starknet = ">=2.6.0" # cairo version
+
+[dev-dependencies]
+snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.32.0" }
+assert_macros = "2.8.4"
+
+[[target.starknet-contract]]
+casm = true
+
+[scripts]
+test = "snforge test --max-n-steps 30000000"
+buildr = "scarb --profile release build"
+coverage = "snforge test --save-trace-data --rerun-failed && snforge test --coverage --rerun-failed && genhtml -o coverage_report coverage/coverage.lcov"
+
+[[tool.snforge.fork]]
+name = "mainnet_latest"
+url = "$RPC_URL"
+block_id.tag = "latest"
+
+[[tool.snforge.fork]]
+name = "mainnet_846087"
+url = "$RPC_URL"
+block_id.number = "846087"
+
+[[tool.snforge.fork]]
+name = "mainnet_630393"
+url = "$RPC_URL"
+block_id.number = "630393"
+
+[[tool.snforge.fork]]
+name = "mainnet_660943"
+url = "$RPC_URL"
+block_id.number = "660943"
+
+[[tool.snforge.fork]]
+name = "mainnet_661452"
+url = "$RPC_URL"
+block_id.number = "661452"
+
+[[tool.snforge.fork]]
+name = "mainnet_usdc_large"
+url = "$RPC_URL"
+block_id.number = "648429"
+
+[[tool.snforge.fork]]
+name = "mainnet_671812"
+url = "$RPC_URL"
+block_id.number = "671812"
+
+[[tool.snforge.fork]]
+name = "mainnet_1078313"
+url = "$RPC_URL"
+block_id.number = "1078313"
+
+[[tool.snforge.fork]]
+name = "mainnet_1025136"
+url = "$RPC_URL"
+block_id.number = "1025136"
+
+[[tool.snforge.fork]]
+name = "mainnet_971311"
+url = "$RPC_URL"
+block_id.number = "971311"
+
+[[tool.snforge.fork]]
+name = "mainnet_1134787"
+url = "$RPC_URL"
+block_id.number = "1134787"
+
+[[tool.snforge.fork]]
+name = "mainnet_1165999"
+url = "$RPC_URL"
+block_id.number = "1165999"
+
+[profile.dev.cairo]
+unstable-add-statements-code-locations-debug-info = true
+unstable-add-statements-functions-debug-info = true
+inlining-strategy = "avoid"

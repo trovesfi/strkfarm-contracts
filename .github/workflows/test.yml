@@ -1,0 +1,28 @@
+name: build and test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+permissions: read-all
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Starknet Foundry
+        uses: foundry-rs/setup-snfoundry@v3
+
+      - uses: actions/checkout@v3
+      
+      - uses: software-mansion/setup-scarb@v1
+      - run: scarb fmt --check
+
+      - run: scarb build --test
+
+      - uses: foundry-rs/setup-snfoundry@v3
+      - run: scarb test --max-n-steps 3000000000
