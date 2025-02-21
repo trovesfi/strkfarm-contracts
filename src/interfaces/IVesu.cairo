@@ -1,4 +1,4 @@
-use starknet::{ContractAddress, get_contract_address, get_caller_address};
+use starknet::{ContractAddress};
 use alexandria_math::i257::i257;
 
 #[derive(PartialEq, Copy, Drop, Serde, Default)]
@@ -100,7 +100,9 @@ pub trait ISton<TContractState> {
     fn asset_config(
         ref self: TContractState, pool_id: felt252, asset: ContractAddress
     ) -> (AssetConfig, u256);
-    fn asset_config_unsafe(self: @TContractState, pool_id: felt252, asset: ContractAddress) -> (AssetConfig, u256);
+    fn asset_config_unsafe(
+        self: @TContractState, pool_id: felt252, asset: ContractAddress
+    ) -> (AssetConfig, u256);
     fn position(
         ref self: TContractState,
         pool_id: felt252,

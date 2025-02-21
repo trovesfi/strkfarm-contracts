@@ -1,11 +1,9 @@
 use starknet::{ContractAddress, get_contract_address};
 use strkfarm_contracts::helpers::constants;
 use openzeppelin::token::erc20::interface::{
-    IERC20, IERC20Dispatcher, IERC20DispatcherTrait, ERC20ABIDispatcher, ERC20ABIDispatcherTrait
+    IERC20Dispatcher, IERC20DispatcherTrait, ERC20ABIDispatcher, ERC20ABIDispatcherTrait
 };
-use strkfarm_contracts::interfaces::oracle::{
-    IPriceOracle, IPriceOracleDispatcher, IPriceOracleDispatcherTrait
-};
+use strkfarm_contracts::interfaces::oracle::{IPriceOracleDispatcher, IPriceOracleDispatcherTrait};
 use strkfarm_contracts::helpers::safe_decimal_math;
 use strkfarm_contracts::helpers::ERC20Helper;
 
@@ -204,13 +202,7 @@ pub fn assert_max_slippage(
 #[cfg(test)]
 mod test_swaps {
     use strkfarm_contracts::helpers::constants;
-    use starknet::{
-        ContractAddress, get_contract_address, get_block_timestamp,
-        contract_address::contract_address_const
-    };
-    use strkfarm_contracts::interfaces::oracle::{
-        IPriceOracle, IPriceOracleDispatcher, IPriceOracleDispatcherTrait
-    };
+    use strkfarm_contracts::interfaces::oracle::{IPriceOracleDispatcher};
 
     #[test]
     #[fork("mainnet_usdc_large")]

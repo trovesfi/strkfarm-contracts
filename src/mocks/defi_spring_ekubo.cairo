@@ -1,15 +1,12 @@
 #[starknet::contract]
 pub mod DefiSpringEkuboMock {
     use strkfarm_contracts::helpers::constants;
-    use strkfarm_contracts::interfaces::IEkuboDistributor::{
-        IEkuboDistributor, Claim
-    };
+    use strkfarm_contracts::interfaces::IEkuboDistributor::{IEkuboDistributor, Claim};
     use strkfarm_contracts::helpers::ERC20Helper;
-    use openzeppelin::token::erc20::interface::{IERC20, IERC20Dispatcher, IERC20DispatcherTrait};
+    use openzeppelin::token::erc20::interface::{IERC20Dispatcher};
 
     #[storage]
-    pub struct Storage {
-    }
+    pub struct Storage {}
 
     #[abi(embed_v0)]
     pub impl DefiSpringEkuboMockImpl of IEkuboDistributor<ContractState> {

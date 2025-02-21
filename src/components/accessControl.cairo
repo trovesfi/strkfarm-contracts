@@ -16,7 +16,8 @@ pub mod AccessControl {
     impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
 
     #[abi(embed_v0)]
-    impl AccessControlImpl = AccessControlComponent::AccessControlImpl<ContractState>;
+    impl AccessControlImpl =
+        AccessControlComponent::AccessControlImpl<ContractState>;
 
     #[storage]
     struct Storage {
@@ -49,7 +50,7 @@ pub mod AccessControl {
 
     #[constructor]
     fn constructor(
-        ref self: ContractState, 
+        ref self: ContractState,
         admin: ContractAddress,
         governor_address: ContractAddress,
         relayer_address: ContractAddress,
@@ -77,8 +78,6 @@ pub mod AccessControl {
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
             self.access_control.assert_only_role(Roles::DEFAULT_ADMIN_ROLE);
 
-            // @audit assert the new clash hash support access control interface
-            // probably do a syscall to the new clash hash to check if it implements the access control interface
             self.upgradeable.upgrade(new_class_hash);
         }
     }

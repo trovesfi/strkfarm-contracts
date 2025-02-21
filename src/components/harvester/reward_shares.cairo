@@ -6,16 +6,16 @@ use starknet::{ContractAddress};
 
 #[derive(Drop, Copy, Serde, starknet::Store, starknet::Event)]
 pub struct RewardsInfo {
-    pub amount: felt252, // (e.g. STRK for Auto STRK, USDC for Auto USDC)
-    pub shares: felt252, // shares of underlying contract (e.g. frmzSTRK)
-    pub total_round_points: felt252, // total points of round which is compared with user shares round to compute user shares
+    pub amount: u128, // (e.g. STRK for Auto STRK, USDC for Auto USDC)
+    pub shares: u128, // shares of underlying contract (e.g. frmzSTRK)
+    pub total_round_points: u128, // total points of round which is compared with user shares round to compute user shares
     pub block_number: u64, // When rewards were harvested
 }
 
 #[derive(Drop, Copy, Serde, starknet::Store, starknet::Event)]
 pub struct UserRewardsInfo {
-    pub pending_round_points: felt252, // pending points of user in current round
-    pub shares_owned: felt252, // total shares of user in underlying contract used to compute harvest shares
+    pub pending_round_points: u128, // pending points of user in current round
+    pub shares_owned: u128, // total shares of user in underlying contract used to compute harvest shares
     pub block_number: u64, // last updated time
     pub index: u32, // index of rewardsInfo
 }
@@ -26,18 +26,13 @@ pub trait IRewardShare<TState> {
     fn get_user_reward_info(self: @TState, user: ContractAddress) -> UserRewardsInfo;
     fn get_rewards_info(self: @TState, index: u32) -> RewardsInfo;
     fn get_total_rewards(self: @TState) -> u32;
-    fn get_total_unminted_shares(self: @TState) -> felt252;
-    /// @dev just a one time setters for upgrade
-    // fn set_last_updated_block(ref self: TState, block_number: u64);
-    // fn set_rewards_info(ref self: TState, index: u32, info: RewardsInfo);
-    // fn set_user_rewards_info(ref self: TState, user: ContractAddress, info: UserRewardsInfo,
-    // total_shares: u256);
-    fn get_additional_shares(self: @TState, user: ContractAddress,) -> (felt252, u64, felt252);
+    fn get_total_unminted_shares(self: @TState) -> u128;
+    fn get_additional_shares(self: @TState, user: ContractAddress,) -> (u128, u64, u128);
 }
 
 #[starknet::component]
 pub mod RewardShareComponent {
-    use starknet::{ContractAddress, get_caller_address, get_block_timestamp, get_block_number};
+    use starknet::{ContractAddress, get_block_timestamp, get_block_number};
     use strkfarm_contracts::helpers::safe_decimal_math;
     use super::{RewardsInfo, UserRewardsInfo, IRewardShare};
 
@@ -55,15 +50,17 @@ pub mod RewardShareComponent {
         // rewardsInfo gets add when ever there is harvesting
         rewards_info: starknet::storage::Map<u32, RewardsInfo>, // index => RewardsInfo
         rewards_len: u32,
-        total_underlying_shares: felt252, // total new shares of underlying contract (e.g. in frmzSTRK)
-        user_rewards_info: starknet::storage::Map<ContractAddress, UserRewardsInfo>, // (user) => UserRewardsInfo
+        total_underlying_shares: u128, // total new shares of underlying contract (e.g. in frmzSTRK)
+        user_rewards_info: starknet::storage::Map<
+            ContractAddress, UserRewardsInfo
+        >, // (user) => UserRewardsInfo
     }
 
     #[derive(Drop, starknet::Event)]
     struct Rewards {
         index: u32,
         info: RewardsInfo,
-        total_reward_shares: felt252,
+        total_reward_shares: u128,
         timestamp: u64,
     }
 
@@ -72,7 +69,7 @@ pub mod RewardShareComponent {
         #[key]
         user: ContractAddress,
         info: UserRewardsInfo,
-        total_reward_shares: felt252,
+        total_reward_shares: u128,
         timestamp: u64,
     }
 
@@ -101,48 +98,8 @@ pub mod RewardShareComponent {
             self.rewards_len.read()
         }
 
-        /// @dev just a one time setters for upgrade
-        // fn set_last_updated_block(ref self: ComponentState<TContractState>, block_number: u64) {
-        //   let owner = self.Ownable_owner.read();
-        //   let caller = get_caller_address();
-        //   /// println!("owner: {:?}", owner);
-        //   assert(owner == caller, 'Only owner');
-
-        //   let mut current_index = self.rewards_len.read(); // bcz user will get rewards from here
-
-        //   // call init if rewards are not initialized
-        //   if (current_index == 0) {
-        //     // rewards map is not initialized
-        //     self.init(block_number);
-        //     current_index = self.rewards_len.read();
-        //   }
-
-        //   self.last_updated_block.write(block_number);
-        // }
-
-        // fn set_rewards_info(ref self: ComponentState<TContractState>, index: u32, info: RewardsInfo) {
-        //     let owner = self.Ownable_owner.read();
-        //     let caller = get_caller_address();
-        //     assert(owner == caller, 'Only owner');
-        //     self.rewards_info.write(index, info);
-
-        //     self.rewards_len.write(1);
-        // }
-
-        // fn set_user_rewards_info(ref self: ComponentState<TContractState>, user: ContractAddress,
-        //     info: UserRewardsInfo, total_shares: u256) {
-        //     let owner = self.Ownable_owner.read();
-        //     let caller = get_caller_address();
-        //     assert(owner == caller, 'Only owner');
-        //     let current_index = self.rewards_len.read(); // bcz user will get rewards from here
-        //     assert(info.index == current_index, 'Invalid index');
-        //     self.user_rewards_info.write(user, info);
-        // }
-            
-
         /// shares that are not yet created in contract global storage (e.g. in totalSupply var)
-        fn get_total_unminted_shares(self: @ComponentState<TContractState>) -> felt252 {
-            /// println!("total unminted: {:?}", self.total_underlying_shares.read());
+        fn get_total_unminted_shares(self: @ComponentState<TContractState>) -> u128 {
             self.total_underlying_shares.read()
         }
 
@@ -150,13 +107,13 @@ pub mod RewardShareComponent {
         /// points collected
         fn get_additional_shares(
             self: @ComponentState<TContractState>, user: ContractAddress,
-        ) -> (felt252, u64, felt252) {
+        ) -> (u128, u64, u128) {
             let total_rounds = self.rewards_len.read();
             let user_rewards: UserRewardsInfo = self.user_rewards_info.read(user);
             let mut current_index = user_rewards.index; // computation of points begin here
 
             // variables updated in loop
-            let mut net_additional_shares: felt252 = 0;
+            let mut net_additional_shares: u128 = 0;
             let mut last_block_number = user_rewards.block_number;
 
             // no deposits by user
@@ -166,11 +123,7 @@ pub mod RewardShareComponent {
 
             let mut user_shares = user_rewards.shares_owned;
             let mut pending_points = user_rewards.pending_round_points;
-            /// println!("get_additional_shares: current_index: {:?}", current_index);
-            /// println!("get_additional_shares: total_rounds: {:?}", total_rounds);
             loop {
-                /// println!("\n<> loop: {:?}", current_index);
-
                 let rewards: RewardsInfo = self.rewards_info.read(current_index);
                 let mut end_block_number = rewards.block_number;
 
@@ -179,13 +132,9 @@ pub mod RewardShareComponent {
                     end_block_number = get_block_number();
                 }
 
-                /// println!("get_additional_shares: last_block_number: {:?}", last_block_number);
-                /// println!("get_additional_shares: end_block_number: {:?}", end_block_number);
                 assert(last_block_number <= end_block_number, 'Reward: Invalid block number');
 
-                let block_diff: felt252 = (end_block_number - last_block_number).into();
-                /// println!("get_additional_shares: block_diff: {:?}", block_diff);
-                /// println!("get_additional_shares: shares_owned: {:?}", user_shares);
+                let block_diff: u128 = (end_block_number - last_block_number).into();
 
                 // compute user's new points for this round
                 let user_round_points = (user_shares * block_diff);
@@ -201,7 +150,6 @@ pub mod RewardShareComponent {
                 // if user has pending points, then add them to user_round_points
                 let user_round_points = user_round_points + pending_points;
                 let total_round_points = rewards.total_round_points;
-                /// println!("get_additional_shares: total_round_points: {:?}", total_round_points);
                 if (total_round_points == 0) {
                     // no shares minted in this round
                     // can happen if there are deposits in the same block as harvest
@@ -209,25 +157,19 @@ pub mod RewardShareComponent {
                     last_block_number = end_block_number;
                     continue;
                 }
-                /// println!("get_additional_shares: reward.shares: {:?}", rewards.shares);
-                /// println!("get_additional_shares: user_round_points: {:?}", user_round_points);
-                /// println!("get_additional_shares: pending_round_points: {:?}",  user_rewards.pending_round_points);
                 let additional_shares = safe_decimal_math::div_round_down(
-                    (user_round_points * rewards.shares).into(), total_round_points.into(),
+                    user_round_points.into() * rewards.shares.into(), total_round_points.into(),
                 );
-                /// println!("get_additional_shares: additional_shares: {:?}", additional_shares);
 
                 net_additional_shares += additional_shares.try_into().unwrap();
-                user_shares +=
-                    additional_shares.try_into().unwrap(); // updated total shares will be used for next round
+                user_shares += additional_shares
+                    .try_into()
+                    .unwrap(); // updated total shares will be used for next round
                 current_index += 1;
                 last_block_number = end_block_number;
                 pending_points = 0;
-                /// println!("get_additional_shares: last_block_number updated2: {:?}", last_block_number);
             };
 
-            /// println!("pending shares: {:?}", pending_points);
-            /// println!("last_block_number: {:?}", last_block_number);
             return (net_additional_shares, last_block_number, pending_points);
         }
     }
@@ -239,9 +181,9 @@ pub mod RewardShareComponent {
         // called everytime rewards are harvested
         fn update_harvesting_rewards(
             ref self: ComponentState<TContractState>,
-            amount: felt252, // e.g. USDC reward
-            shares: felt252, // in lp token terms of the contract (e.g. frmzUSDC) that corresponds to amount
-            total_shares: felt252,
+            amount: u128, // e.g. USDC reward
+            shares: u128, // in lp token terms of the contract (e.g. frmzUSDC) that corresponds to amount
+            total_shares: u128,
         ) {
             let mut len = self.rewards_len.read();
             assert(len > 0, 'Rewards not initialized');
@@ -252,7 +194,9 @@ pub mod RewardShareComponent {
             // unless everyone withdraws just before harvest.
             let total_shares_u256: u256 = total_shares.into();
             // in cases like dnmm_vesu, total_shares is 0 but it can still earn rewards
-            assert(total_shares_u256 == 0 || shares.into() < total_shares_u256, 'Invalid shares [3]');
+            assert(
+                total_shares_u256 == 0 || shares.into() < total_shares_u256, 'Invalid shares [3]'
+            );
 
             let now = get_block_number();
             let total_round_points = self.get_total_round_points(total_shares);
@@ -280,11 +224,11 @@ pub mod RewardShareComponent {
         fn update_user_rewards(
             ref self: ComponentState<TContractState>,
             user: ContractAddress,
-            shares_owned: felt252, // current lp shares
-            pending_shares: felt252, // pending lp shares
+            shares_owned: u128, // current lp shares
+            pending_shares: u128, // pending lp shares
             pending_shares_last_block: u64,
-            pending_round_points: felt252, // pending shares of user in current round
-            total_shares: felt252, // total lp shares (prev) (e.g. totalSupply frmzSTRK)
+            pending_round_points: u128, // pending shares of user in current round
+            total_shares: u128, // total lp shares (prev) (e.g. totalSupply frmzSTRK)
         ) {
             let user_rewards = self.user_rewards_info.read(user);
             let mut current_index = self.rewards_len.read(); // bcz user will get rewards from here
@@ -296,8 +240,6 @@ pub mod RewardShareComponent {
                 current_index = self.rewards_len.read();
             }
 
-            /// println!("update_user_rewards [1]");
-
             // update total round shares
             let mut rewards: RewardsInfo = self.rewards_info.read(current_index);
             assert(rewards.amount == 0, 'Rewards already distributed'); // just an extra check
@@ -308,18 +250,12 @@ pub mod RewardShareComponent {
             /// assume that contract will mint these pending_shares,
             /// hence reduce total underlying shares as totalSupply already increases with mint
             let total_underlying_shares = self.total_underlying_shares.read();
-            /// println!("update_user_rewards: total_underlying_shares: {:?}", total_underlying_shares);
-            /// println!("update_user_rewards: pending_shares: {:?}", pending_shares);
             self.total_underlying_shares.write(total_underlying_shares - pending_shares);
 
             self.update_rewards_info(current_index, rewards);
             self.last_updated_block.write(rewards.block_number);
-            /// println!("update_user_rewards [2]");
-            /// println!("update_user_rewards: shares: {:?}", shares_owned);
-            /// println!("update_user_rewards: total_shares: {:?}", total_shares);
 
             if (user_rewards.block_number == 0) {
-                /// println!("update_user_rewards [3]");
                 // first time user
                 let user_rewards = UserRewardsInfo {
                     pending_round_points: 0,
@@ -329,7 +265,6 @@ pub mod RewardShareComponent {
                 };
                 self.update_user_rewards_info(user, user_rewards);
             } else {
-                /// println!("update_user_rewards [4]");
                 // existing user. Compute new shares and add them.
                 let user_rewards = UserRewardsInfo {
                     pending_round_points: pending_round_points,
@@ -343,7 +278,7 @@ pub mod RewardShareComponent {
     }
 
     #[generate_trait]
-    impl PrivateImpl<
+    pub impl PrivateImpl<
         TContractState, +HasComponent<TContractState>, +Drop<TContractState>
     > of PrivateTrait<TContractState> {
         /// blocknumber of first deposit
@@ -366,14 +301,12 @@ pub mod RewardShareComponent {
 
         /// total points accrued since last update
         fn get_total_round_points(
-            self: @ComponentState<TContractState>, total_shares: felt252,
-        ) -> felt252 {
+            self: @ComponentState<TContractState>, total_shares: u128,
+        ) -> u128 {
             let last_block = self.last_updated_block.read();
             assert(last_block > 0, 'Invalid block number');
             let now = get_block_number();
-            let block_diff: felt252 = (now - last_block).into();
-            /// println!("get_total_round_points: block_diff: {:?}", block_diff);
-            /// println!("get_total_round_points: total_shares: {:?}", total_shares);
+            let block_diff: u128 = (now - last_block).into();
             return total_shares * block_diff;
         }
 
@@ -393,7 +326,6 @@ pub mod RewardShareComponent {
         fn update_rewards_info(
             ref self: ComponentState<TContractState>, index: u32, info: RewardsInfo,
         ) {
-            /// println!("update_rewards_info: shares: {:?}", info.shares);
             self.rewards_info.write(index, info);
             self
                 .emit(

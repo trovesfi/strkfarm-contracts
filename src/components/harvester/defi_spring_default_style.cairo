@@ -1,10 +1,7 @@
 use strkfarm_contracts::components::harvester::interface::{IClaimTrait, ClaimResult};
 use strkfarm_contracts::interfaces::IEkuboDistributor::{Claim};
 use starknet::{ContractAddress, get_contract_address};
-use openzeppelin::token::erc20::interface::{
-    IERC20, IERC20Dispatcher, IERC20DispatcherTrait, ERC20ABIDispatcher, ERC20ABIDispatcherTrait
-};
-use starknet::contract_address::{contract_address_const};
+use openzeppelin::token::erc20::interface::{ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
 use strkfarm_contracts::helpers::constants;
 
 /// -------------

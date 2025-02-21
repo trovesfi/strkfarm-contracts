@@ -1,9 +1,9 @@
-use starknet::{ContractAddress, get_block_timestamp, get_contract_address};
+use starknet::{ContractAddress};
 use strkfarm_contracts::interfaces::swapcomp::{ISwapMod,};
 use core::num::traits::Zero;
 use strkfarm_contracts::helpers::ERC20Helper;
 use strkfarm_contracts::components::swap::{AvnuMultiRouteSwap, Route};
-use ekubo::interfaces::core::{ICoreDispatcher, ICoreDispatcherTrait};
+use ekubo::interfaces::core::{ICoreDispatcher};
 use ekubo::types::keys::{PoolKey};
 use ekubo::types::i129::{i129};
 use ekubo::components::clear::{IClearDispatcher, IClearDispatcherTrait};
@@ -14,15 +14,11 @@ use ekubo::types::delta::{Delta};
 #[starknet::interface]
 pub trait IRouter<TState> {
     fn multihop_swap(
-        ref self: TState,
-        nodes: Array<RouteNode>,
-        token_amount: TokenAmount,
+        ref self: TState, nodes: Array<RouteNode>, token_amount: TokenAmount,
     ) -> Array<Delta>;
 
     fn quote_multihop_swap(
-        self: @TState,
-        nodes: Array<RouteNode>,
-        token_amount: TokenAmount,
+        self: @TState, nodes: Array<RouteNode>, token_amount: TokenAmount,
     ) -> Array<Delta>;
 }
 
@@ -33,106 +29,84 @@ pub struct EkuboSwapStruct {
 }
 
 pub fn get_nodes(routes: Array<Route>, core: ICoreDispatcher) -> Array<RouteNode> {
-  let n_routes = routes.len();
-  assert(n_routes > 0, 'EkuboSwap: no routes');
+    let n_routes = routes.len();
+    assert(n_routes > 0, 'EkuboSwap: no routes');
 
-  let mut nodes: Array<RouteNode> = array![];
-  let n_routes = routes.len();
-  let mut i = 0;
+    let mut nodes: Array<RouteNode> = array![];
+    let n_routes = routes.len();
+    let mut i = 0;
 
-  loop {
-    let route = routes.at(i);
+    loop {
+        let route = routes.at(i);
 
-    // just to ensure other routes aren't passed by mistake
-    assert(
-        *route.exchange_address == core.contract_address,
-        'EkuboSwap: invalid route [2]'
-    );
+        // just to ensure other routes aren't passed by mistake
+        assert(*route.exchange_address == core.contract_address, 'EkuboSwap: invalid route [2]');
 
-    let additional_swap_params = route.additional_swap_params;
-    let pool_key = PoolKey {
-        token0: (*additional_swap_params[0]).try_into().unwrap(),
-        token1: (*additional_swap_params[1]).try_into().unwrap(),
-        fee: (*additional_swap_params[2]).try_into().unwrap(),
-        tick_spacing: (*additional_swap_params[3]).try_into().unwrap(),
-        extension: (*additional_swap_params[4]).try_into().unwrap(),
+        let additional_swap_params = route.additional_swap_params;
+        let pool_key = PoolKey {
+            token0: (*additional_swap_params[0]).try_into().unwrap(),
+            token1: (*additional_swap_params[1]).try_into().unwrap(),
+            fee: (*additional_swap_params[2]).try_into().unwrap(),
+            tick_spacing: (*additional_swap_params[3]).try_into().unwrap(),
+            extension: (*additional_swap_params[4]).try_into().unwrap(),
+        };
+        let node = RouteNode {
+            pool_key: pool_key,
+            sqrt_ratio_limit: (*additional_swap_params[5]).try_into().unwrap(),
+            skip_ahead: 100,
+        };
+        nodes.append(node);
+        i += 1;
+        if i >= n_routes {
+            break;
+        }
     };
-    let node = RouteNode {
-        pool_key: pool_key,
-        sqrt_ratio_limit: (*additional_swap_params[5]).try_into().unwrap(),
-        skip_ahead: 100,
-    };
-    nodes.append(node);
-    i += 1;
-    if i >= n_routes {
-        break;
-    }
-  };
 
-  return nodes;
+    return nodes;
 }
 
 pub fn get_token_amount(from_token: ContractAddress, from_amount: u256) -> TokenAmount {
-  TokenAmount {
-    token: from_token,
-    amount: i129 { mag: from_amount.try_into().unwrap(), sign: false, }
-  }
+    TokenAmount {
+        token: from_token, amount: i129 { mag: from_amount.try_into().unwrap(), sign: false, }
+    }
 }
 
 pub fn process_swap_params(
-  routes: Array<Route>, 
-  core: ICoreDispatcher,
-  from_token: ContractAddress,
-  to_token: ContractAddress,
-  from_amount: u256,
-  to_amount: u256,
-) -> (
-  Array<RouteNode>,
-  TokenAmount,
-) {
-  let n_routes = routes.len();
-  assert(n_routes > 0, 'EkuboSwap: no routes');
+    routes: Array<Route>,
+    core: ICoreDispatcher,
+    from_token: ContractAddress,
+    to_token: ContractAddress,
+    from_amount: u256,
+    to_amount: u256,
+) -> (Array<RouteNode>, TokenAmount,) {
+    let n_routes = routes.len();
+    assert(n_routes > 0, 'EkuboSwap: no routes');
 
-  // assert atleast one of token0 and token1 is from token from route 0
-  let token0: ContractAddress = (*routes.at(0).additional_swap_params[0])
-      .try_into()
-      .unwrap();
-  let token1: ContractAddress = (*routes.at(0).additional_swap_params[1])
-      .try_into()
-      .unwrap();
-  assert(
-      token0 == from_token || token1 == from_token,
-      'EkuboSwap: invalid route [0]'
-  );
+    // assert atleast one of token0 and token1 is from token from route 0
+    let token0: ContractAddress = (*routes.at(0).additional_swap_params[0]).try_into().unwrap();
+    let token1: ContractAddress = (*routes.at(0).additional_swap_params[1]).try_into().unwrap();
+    assert(token0 == from_token || token1 == from_token, 'EkuboSwap: invalid route [0]');
 
-  // assert token_to_address is from token from route n_routes - 1
-  let last_token0: ContractAddress = (*routes
-      .at(n_routes - 1)
-      .additional_swap_params[0])
-      .try_into()
-      .unwrap();
-  let last_token1: ContractAddress = (*routes
-      .at(n_routes - 1)
-      .additional_swap_params[1])
-      .try_into()
-      .unwrap();
-  assert(
-      last_token0 == to_token
-          || last_token1 == to_token,
-      'EkuboSwap: invalid route [1]'
-  );
+    // assert token_to_address is from token from route n_routes - 1
+    let last_token0: ContractAddress = (*routes.at(n_routes - 1).additional_swap_params[0])
+        .try_into()
+        .unwrap();
+    let last_token1: ContractAddress = (*routes.at(n_routes - 1).additional_swap_params[1])
+        .try_into()
+        .unwrap();
+    assert(last_token0 == to_token || last_token1 == to_token, 'EkuboSwap: invalid route [1]');
 
-  let mut nodes = get_nodes(routes, core);
-  
-  let token_amount = if (to_amount == 0) {
-    get_token_amount(from_token, from_amount)
-  } else {
-    let mut output = get_token_amount(to_token, to_amount);
-    output.amount.sign = true;
-    output
-  };
+    let mut nodes = get_nodes(routes, core);
 
-  return (nodes, token_amount);
+    let token_amount = if (to_amount == 0) {
+        get_token_amount(from_token, from_amount)
+    } else {
+        let mut output = get_token_amount(to_token, to_amount);
+        output.amount.sign = true;
+        output
+    };
+
+    return (nodes, token_amount);
 }
 
 pub fn perform_ekubo_swap(
@@ -145,23 +119,17 @@ pub fn perform_ekubo_swap(
     min_amount_out: u256,
 ) -> u256 {
     // execute swap
-    ERC20Helper::strict_transfer(
-        from_token,
-        router.contract_address,
-        from_amount
-    );
+    ERC20Helper::strict_transfer(from_token, router.contract_address, from_amount);
     router.multihop_swap(nodes, token_amount);
 
     // withdraw remaining tokens
     let clearDisp = IClearDispatcher { contract_address: router.contract_address, };
     let to_token_out = clearDisp.clear(IERC20Dispatcher { contract_address: to_token });
-    assert(
-        min_amount_out == 0
-                || to_token_out >= min_amount_out,
-            'EkuboSwap: min amount out err'
-    );
+    assert(min_amount_out == 0 || to_token_out >= min_amount_out, 'EkuboSwap: min amount out err');
 
-    let from_token_out = if (token_amount.amount.sign) { // if true, we are trying to get exact output token amount
+    let from_token_out = if (token_amount
+        .amount
+        .sign) { // if true, we are trying to get exact output token amount
         // input token may be left out to meet required output token amount;
         // so transfer it back to the contract
         clearDisp.clear(IERC20Dispatcher { contract_address: from_token })
@@ -169,10 +137,7 @@ pub fn perform_ekubo_swap(
         0
     };
     let from_token_used = from_amount - from_token_out;
-    assert(
-        from_token_used > 0,
-        'EkuboSwap: from token used'
-    );
+    assert(from_token_used > 0, 'EkuboSwap: from token used');
 
     return to_token_out;
 }
@@ -182,22 +147,32 @@ pub impl ekuboSwapImpl of ISwapMod<EkuboSwapStruct> {
         let from_token = swap_params.token_from_address;
         let from_amount = swap_params.token_from_amount;
         let to_token = swap_params.token_to_address;
-        let min_amount_out = swap_params.token_to_min_amount; 
+        let min_amount_out = swap_params.token_to_min_amount;
         let (nodes, token_amount) = process_swap_params(
-          swap_params.routes, self.core,
-          from_token, to_token, from_amount, swap_params.token_to_amount
+            swap_params.routes,
+            self.core,
+            from_token,
+            to_token,
+            from_amount,
+            swap_params.token_to_amount
         );
 
-        perform_ekubo_swap(self.router, nodes, from_token, to_token, from_amount, token_amount, min_amount_out)
+        perform_ekubo_swap(
+            self.router, nodes, from_token, to_token, from_amount, token_amount, min_amount_out
+        )
     }
 
     fn get_amounts_in(self: EkuboSwapStruct, amount_out: u256, path: Array<Route>,) -> Array<u256> {
-      core::panic_with_felt252('EkuboSwap: not implemented');
-      return array![];
+        if (false) {
+            core::panic_with_felt252('EkuboSwap: not implemented');
+        }
+        return array![];
     }
 
     fn get_amounts_out(self: EkuboSwapStruct, amount_in: u256, path: Array<Route>,) -> Array<u256> {
-        core::panic_with_felt252('EkuboSwap: not implemented');
+        if (false) {
+            core::panic_with_felt252('EkuboSwap: not implemented');
+        }
         return array![];
     }
 
@@ -209,16 +184,14 @@ pub impl ekuboSwapImpl of ISwapMod<EkuboSwapStruct> {
 
 #[cfg(test)]
 mod tests {
-    use starknet::{ContractAddress, get_contract_address};
+    use starknet::{get_contract_address};
     use strkfarm_contracts::components::swap::{AvnuMultiRouteSwap, Route};
     use strkfarm_contracts::interfaces::swapcomp::{ISwapMod,};
     use strkfarm_contracts::helpers::constants;
     use super::{EkuboSwapStruct, ekuboSwapImpl,};
-    use ekubo::interfaces::core::{ICoreDispatcher, ICoreDispatcherTrait};
-    use super::{IRouterDispatcher, IRouterDispatcherTrait, RouteNode, TokenAmount};
-    use snforge_std::{
-        declare, ContractClassTrait, start_cheat_caller_address, stop_cheat_caller_address
-    };
+    use ekubo::interfaces::core::{ICoreDispatcher};
+    use super::{IRouterDispatcher};
+    use snforge_std::{start_cheat_caller_address, stop_cheat_caller_address};
     use strkfarm_contracts::helpers::ERC20Helper;
 
     fn getEkuboStruct() -> EkuboSwapStruct {
@@ -363,7 +336,7 @@ mod tests {
             routes: array![route1, route2],
         };
 
-        let amount_out = ekuboStruct.swap(swap_params);
+        let _ = ekuboStruct.swap(swap_params);
         let balance_this_after = ERC20Helper::balanceOf(
             constants::STRK_ADDRESS(), get_contract_address()
         );
@@ -404,7 +377,6 @@ mod tests {
     fn test_ekubo_no_routes_err() {
         load_usdc();
         let ekuboStruct = getEkuboStruct();
-        let route1 = getUSDCUSDTRoute();
 
         let swap_params = AvnuMultiRouteSwap {
             token_from_address: constants::USDC_ADDRESS(),

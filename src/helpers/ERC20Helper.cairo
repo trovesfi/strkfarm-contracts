@@ -13,7 +13,6 @@ pub fn approve(token: ContractAddress, spender: ContractAddress, amount: u256) {
     if (amount != 0) {
         let approved = dispatcher(token).approve(spender, amount);
         assert(approved, 'Approval failed');
-        //// println!(">>>> Approved tokens");
     }
 }
 
@@ -23,7 +22,6 @@ pub fn transfer_from(
     if (amount != 0) {
         let transferred = dispatcher(token).transferFrom(from, to, amount);
         assert(transferred, 'Transfer  failed');
-        //// println!(">>>> Transferfrom {:?} tokens", amount);
     }
 }
 
@@ -38,7 +36,6 @@ pub fn transfer(token: ContractAddress, to: ContractAddress, amount: u256) {
     if (amount != 0) {
         let transferred = dispatcher(token).transfer(to, amount);
         assert(transferred, 'Transfer failed');
-        //// println!(">>>> Transfered {:?} tokens", amount);
     }
 }
 

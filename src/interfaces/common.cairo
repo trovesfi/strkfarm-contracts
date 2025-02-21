@@ -1,4 +1,4 @@
-use starknet::{ClassHash, ContractAddress};
+use starknet::{ClassHash};
 
 #[starknet::interface]
 pub trait ICommon<TState> {

@@ -1,12 +1,8 @@
-use strkfarm_contracts::interfaces::IEkuboDistributor::{
-    IEkuboDistributor, IEkuboDistributorDispatcher, IEkuboDistributorDispatcherTrait, Claim
-};
+use strkfarm_contracts::interfaces::IEkuboDistributor::{Claim};
 use strkfarm_contracts::components::swap::{AvnuMultiRouteSwap, AvnuMultiRouteSwapImpl};
-use strkfarm_contracts::components::harvester::interface::{IClaimTrait, ClaimResult};
-use starknet::{ContractAddress, ClassHash, get_contract_address};
-use strkfarm_contracts::interfaces::oracle::{
-    IPriceOracle, IPriceOracleDispatcher, IPriceOracleDispatcherTrait
-};
+use strkfarm_contracts::components::harvester::interface::{IClaimTrait};
+use starknet::{ContractAddress};
+use strkfarm_contracts::interfaces::oracle::{IPriceOracleDispatcher};
 
 #[starknet::interface]
 pub trait ISimpleHarvest<TState> {
@@ -115,14 +111,11 @@ pub impl HarvestConfigImpl<
         assert(claim2.amount != 0, 'Invalid claim2 amount');
 
         // calls hooks implemented by contract. e.g. get base token address
-        /// println!("before hook");
         let beforeHookResult = HarvestHooksTrait::before_update(ref state);
         let baseTokenAddress = beforeHookResult.baseToken;
 
         // claim with proofs
-        /// println!("claim1");
         let claimResult1 = settings1.claim_with_proofs(claim1, proof1);
-        /// println!("claim2");
         let claimResult2 = settings2.claim_with_proofs(claim2, proof2);
         assert(claimResult1.token == claimResult2.token, 'Hrvt: invld rwd token');
         let depositAmount1 = claimResult1.amount;
@@ -130,7 +123,6 @@ pub impl HarvestConfigImpl<
         let mut depositAmount = depositAmount1 + depositAmount2;
 
         // swap if token is not base token
-        /// println!("swap");
         assert(swapInfo.token_from_amount == depositAmount, 'Invalid token from amount');
         depositAmount =
             check_and_swap_harvest(

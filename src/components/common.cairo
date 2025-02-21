@@ -8,7 +8,9 @@ pub mod CommonComp {
         InternalTrait as PausableInternalTrait, PausableImpl
     };
     use openzeppelin::security::reentrancyguard::ReentrancyGuardComponent;
-    use openzeppelin::access::accesscontrol::interface::{IAccessControlDispatcher, IAccessControlDispatcherTrait};
+    use openzeppelin::access::accesscontrol::interface::{
+        IAccessControlDispatcher, IAccessControlDispatcherTrait
+    };
     use strkfarm_contracts::interfaces::common::ICommon;
     use strkfarm_contracts::components::accessControl::AccessControl::Roles;
     use starknet::{ClassHash, ContractAddress};
@@ -27,7 +29,6 @@ pub mod CommonComp {
         impl ReentrancyGuard: ReentrancyGuardComponent::HasComponent<TContractState>,
         +Drop<TContractState>
     > of ICommon<ComponentState<TContractState>> {
-    
         // todo add options to add additional calldata to execute after the upgrade
         fn upgrade(ref self: ComponentState<TContractState>, new_class: ClassHash) {
             self.assert_admin_role();
@@ -71,11 +72,11 @@ pub mod CommonComp {
             pausable.assert_not_paused();
         }
 
-          // Assert that the caller has a specific role
+        // Assert that the caller has a specific role
         fn has_role(self: @ComponentState<TContractState>, role: felt252) -> bool {
             let access_control = self.access_control.read();
-            IAccessControlDispatcher {contract_address: access_control}
-            .has_role(role, get_caller_address())
+            IAccessControlDispatcher { contract_address: access_control }
+                .has_role(role, get_caller_address())
         }
 
         // Assert that the caller is the DEFAULT_ADMIN_ROLE

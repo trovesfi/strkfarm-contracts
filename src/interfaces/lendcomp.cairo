@@ -1,7 +1,6 @@
 use strkfarm_contracts::helpers::safe_decimal_math;
 use starknet::ContractAddress;
 use strkfarm_contracts::helpers::ERC20Helper;
-use strkfarm_contracts::helpers::constants;
 
 #[derive(Drop, Copy, Serde)]
 pub struct BorrowData {
@@ -35,8 +34,8 @@ pub trait ILendMod<TSettings, T> {
     fn min_borrow_required(self: @TSettings, token: ContractAddress,) -> u256;
     fn deposit_amount(self: @TSettings, asset: ContractAddress, user: ContractAddress) -> u256;
     fn borrow_amount(self: @TSettings, asset: ContractAddress, user: ContractAddress) -> u256;
-    
-    // returns the amount to repay given an amount we want to repay 
+
+    // returns the amount to repay given an amount we want to repay
     // based on conditions like min borrow amount, etc
     fn get_repay_amount(self: @TSettings, token: ContractAddress, amount: u256) -> u256;
 }
@@ -101,18 +100,14 @@ pub fn max_borrow_amount<
 ) -> u256 {
     // max borrow = collateal amount * col price * col factor * borrow factor / (min hf * borrow
     // price)
-    //// println!("Maxborrow: deposit_amount: {:?}", deposit_amount);
     // in 8 decimals as per pragma price
     let col_value_hf = TMMTokenTrait::calculate_collateral_value(
         @deposit_token, *self, deposit_amount
     );
-    //// println!("Maxborrow: col_value: {:?}", col_value_hf);
     // even this price_decimals is also 8
     let (borrow_price, _price_decimals) = TMMTokenTrait::price(@borrow_token, *self);
-    //// println!("Maxborrow: borrow_price: {:?}", borrow_price);
     let borrow_data = TMMTokenTrait::get_borrow_data(@borrow_token, *self);
     let numerator = safe_decimal_math::mul(col_value_hf, borrow_data.borrow_factor);
-    //// println!("Maxborrow: numerator: {:?}", numerator);
     let borrow_underlying = TMMTokenTrait::underlying_asset(@borrow_token, *self);
     let borrow_decimals = ERC20Helper::decimals(borrow_underlying);
 
@@ -120,9 +115,7 @@ pub fn max_borrow_amount<
     // it needs 4 decimals adjustment. price decimals are compensated with that off col pric
     // but to prevent loss of value, numerator must adjust to borrow token decimals first
     let numerator = safe_decimal_math::normalise(numerator, 0, borrow_decimals);
-    //// println!("Maxborrow: numerator: {:?}", numerator);
     let denominator: u256 = min_hf.into() * borrow_price;
-    //// println!("Maxborrow: denominator: {:?}", denominator);
     // now multiply with denominator with 4 decimals adjustment (HF units)
     safe_decimal_math::div_decimals(numerator, denominator, 4)
 }

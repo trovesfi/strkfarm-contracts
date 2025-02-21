@@ -1,15 +1,13 @@
-use starknet::{ContractAddress, get_contract_address, get_caller_address};
+use starknet::{ContractAddress, get_contract_address};
 use strkfarm_contracts::interfaces::IVesu::{
-    IVesu, Amount, ModifyPositionParams, AmountType, AmountDenomination, LTVConfig, Position
+    IVesu, Amount, ModifyPositionParams, AmountType, AmountDenomination
 };
 use strkfarm_contracts::interfaces::IVesu::{IStonDispatcher, IStonDispatcherTrait};
-use strkfarm_contracts::interfaces::oracle::{
-    IPriceOracle, IPriceOracleDispatcher, IPriceOracleDispatcherTrait
-};
+use strkfarm_contracts::interfaces::oracle::{IPriceOracleDispatcher, IPriceOracleDispatcherTrait};
 use strkfarm_contracts::interfaces::lendcomp::ILendMod;
 use strkfarm_contracts::helpers::ERC20Helper;
 use core::num::traits::Zero;
-use alexandria_math::i257::{i257, I257Trait};
+use alexandria_math::i257::{I257Trait};
 use strkfarm_contracts::helpers::pow;
 
 #[derive(Drop, Copy, Serde, starknet::Store)]
@@ -37,12 +35,12 @@ pub impl vesuHelperImpl of IVesu<vesuStruct> {
             collateral: Amount {
                 amount_type: AmountType::Delta,
                 denomination: AmountDenomination::Assets,
-                value: I257Trait::new(0, is_negative: false )
+                value: I257Trait::new(0, is_negative: false)
             },
             debt: Amount {
                 amount_type: AmountType::Delta,
                 denomination: AmountDenomination::Assets,
-                value: I257Trait::new(0, is_negative: false )
+                value: I257Trait::new(0, is_negative: false)
             },
             data: array![0].span()
         };
@@ -148,7 +146,8 @@ pub impl vesuSettingsImpl of ILendMod<vesuStruct, vesuToken> {
     fn min_borrow_required(self: @vesuStruct, token: ContractAddress,) -> u256 {
         let stonDisp = *self.singleton;
         let (config, _) = stonDisp.asset_config(*self.pool_id, *self.debt);
-        let token_price = IPriceOracleDispatcher { contract_address: *self.oracle }.get_price(token);
+        let token_price = IPriceOracleDispatcher { contract_address: *self.oracle }
+            .get_price(token);
         let token_price_u256: u256 = token_price.into();
 
         let token_decimals: u256 = ERC20Helper::decimals(token).into();
@@ -188,12 +187,10 @@ mod tests {
     use strkfarm_contracts::interfaces::lendcomp::ILendMod;
     use strkfarm_contracts::helpers::constants;
     use super::{vesuStruct, vesuToken};
-    use strkfarm_contracts::interfaces::IVesu::{IStonDispatcher, IStonDispatcherTrait};
-    use starknet::{ContractAddress, get_contract_address, get_caller_address};
+    use strkfarm_contracts::interfaces::IVesu::{IStonDispatcher};
+    use starknet::{get_contract_address};
     use starknet::contract_address::contract_address_const;
-    use snforge_std::{
-        declare, ContractClassTrait, start_cheat_caller_address, stop_cheat_caller_address
-    };
+    use snforge_std::{start_cheat_caller_address, stop_cheat_caller_address};
     use strkfarm_contracts::helpers::ERC20Helper;
     use strkfarm_contracts::helpers::pow;
 

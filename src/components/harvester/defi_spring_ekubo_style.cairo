@@ -1,11 +1,9 @@
 use strkfarm_contracts::components::harvester::interface::{IClaimTrait, ClaimResult};
 use strkfarm_contracts::interfaces::IEkuboDistributor::{
-    IEkuboDistributor, IEkuboDistributorDispatcher, IEkuboDistributorDispatcherTrait, Claim
+    IEkuboDistributorDispatcherTrait, Claim, IEkuboDistributorDispatcher
 };
 use starknet::{ContractAddress, get_contract_address};
-use openzeppelin::token::erc20::interface::{
-    IERC20, IERC20Dispatcher, IERC20DispatcherTrait, ERC20ABIDispatcher, ERC20ABIDispatcherTrait
-};
+use openzeppelin::token::erc20::interface::{ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
 
 /// -------------
 /// Distribution contract style used by Ekubo and followed by some others

@@ -9,8 +9,12 @@ pub mod ERC4626Component {
     use core::num::traits::{Bounded, Zero};
     use openzeppelin::token::erc20::ERC20Component::InternalImpl as ERC20InternalImpl;
     use openzeppelin::token::erc20::ERC20Component;
-    use strkfarm_contracts::interfaces::IERC4626::{IERC4626, IERC4626Dispatcher, IERC4626DispatcherTrait};
-    use openzeppelin::token::erc20::interface::{IERC20, IERC20Dispatcher, IERC20DispatcherTrait, IERC20Metadata};
+    use strkfarm_contracts::interfaces::IERC4626::{
+        IERC4626, IERC4626Dispatcher, IERC4626DispatcherTrait
+    };
+    use openzeppelin::token::erc20::interface::{
+        IERC20, IERC20Dispatcher, IERC20DispatcherTrait, IERC20Metadata
+    };
     use strkfarm_contracts::helpers::Math::{Rounding, u256_mul_div, power};
     use starknet::ContractAddress;
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
@@ -157,7 +161,8 @@ pub mod ERC4626Component {
         /// Returns the total amount of the underlying asset that is “managed” by Vault.
         fn total_assets(self: @ComponentState<TContractState>) -> u256 {
             let this = starknet::get_contract_address();
-            IERC20Dispatcher { contract_address: self.ERC4626_asset.read() }.balance_of(this)
+            let erc20_component = get_dep_component!(self, ERC20);
+            erc20_component.balance_of(this)
         }
 
         /// Returns the amount of shares that the Vault would exchange for the amount of assets
@@ -256,7 +261,9 @@ pub mod ERC4626Component {
             match Limit::withdraw_limit(self, owner) {
                 Option::Some(limit) => limit,
                 Option::None => {
-                    let mut erc20_disp = IERC20Dispatcher {contract_address: starknet::get_contract_address()};
+                    let mut erc20_disp = IERC20Dispatcher {
+                        contract_address: starknet::get_contract_address()
+                    };
                     let owner_bal = erc20_disp.balance_of(owner);
                     self._convert_to_assets(owner_bal, Rounding::Floor)
                 }
@@ -301,7 +308,9 @@ pub mod ERC4626Component {
             match Limit::redeem_limit(self, owner) {
                 Option::Some(limit) => limit,
                 Option::None => {
-                    let mut erc20_disp = IERC20Dispatcher {contract_address: starknet::get_contract_address()};
+                    let mut erc20_disp = IERC20Dispatcher {
+                        contract_address: starknet::get_contract_address()
+                    };
                     erc20_disp.balance_of(owner)
                 }
             }
@@ -463,7 +472,7 @@ pub mod ERC4626Component {
             self: @ComponentState<TContractState>, assets: u256, rounding: Rounding
         ) -> u256 {
             let this = starknet::get_contract_address();
-            let mut erc20_disp = IERC20Dispatcher {contract_address: this};
+            let mut erc20_disp = IERC20Dispatcher { contract_address: this };
             let total_supply = erc20_disp.total_supply();
 
             // allows to call the overriden impl of the contract
@@ -483,7 +492,7 @@ pub mod ERC4626Component {
             self: @ComponentState<TContractState>, shares: u256, rounding: Rounding
         ) -> u256 {
             let this = starknet::get_contract_address();
-            let mut erc20_disp = IERC20Dispatcher {contract_address: this};
+            let mut erc20_disp = IERC20Dispatcher { contract_address: this };
             let total_supply = erc20_disp.total_supply();
 
             // allows to call the overriden impl of the contract
