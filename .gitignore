@@ -6,3 +6,4 @@ snfoundry_trace
 coverage
 coverage_report
 node_modules
+.env

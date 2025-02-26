@@ -1,10 +1,9 @@
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 dotenv.config();
-import assert from 'assert'
-import {Account, RawArgs, RpcProvider, TransactionExecutionStatus, extractContractHashes, hash, json, provider} from 'starknet'
+import * as assert from 'assert'
+import {RawArgs, RpcProvider, TransactionExecutionStatus, extractContractHashes, hash, json, provider} from 'starknet'
 import { readFileSync, existsSync, writeFileSync } from 'fs'
 import { IConfig, Network, Store, getDefaultStoreConfig } from '@strkfarm/sdk';
-import { ACCOUNT_NAME } from './harvest';
 
 export function getRpcProvider(rpcUrl: string | undefined = process.env.RPC_URL) {
     assert(rpcUrl, 'invalid RPC_URL');

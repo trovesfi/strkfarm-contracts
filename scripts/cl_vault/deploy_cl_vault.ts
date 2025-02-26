@@ -1,52 +1,87 @@
 import { deployContract, getAccount, getRpcProvider, myDeclare } from "../lib/utils";
-import { 
-    STRK,
-    USDC,
-    EKUBO_POSITIONS,
-    EKUBO_CORE,
-    EKUBO_POSITIONS_NFT,
-    ORACLE_OURS,
-    wstETH,
-    ETH,
-} from "../lib/constants";
+import { EKUBO_POSITIONS, EKUBO_CORE, EKUBO_POSITIONS_NFT, ORACLE_OURS, wstETH, ETH} from "../lib/constants";
+import { declareAndDeployAccessControl } from "../access_control/deploy_access_control";
 
-function createPoolKey() {
+// Added parameters for pool configuration
+function createPoolKey(
+    token0: string,
+    token1: string,
+    fee: string,
+    tick_spacing: number,
+    extension: number = 0
+) {
     return {
-        token0: wstETH,
-        token1: ETH,
-        fee: '34028236692093847977029636859101184',
-        tick_spacing: 200,
-        extension: 0
+        token0,
+        token1,
+        fee,
+        tick_spacing, 
+        extension 
     };
 }
 
-function createBounds() {
+function createBounds(
+    lowerTick: number,
+    upperTick: number,
+    loweSign: boolean,
+    upperSign: boolean
+) {
     return {
         lower: {
-            mag: 160000,
-            sign: false
+            mag: lowerTick, 
+            sign: loweSign     
         },
         upper: {
-            mag: 18000,
-            sign: false
+            mag: upperTick, 
+            sign: upperSign
         }
     };
 }
 
-function createFeeSettings() {
-    let acc = getAccount('strkfarmadmin')
+function createFeeSettings(
+    feeBps: number,
+    collector: string
+) {
     return {
-        fee_bps: 1000,
-        fee_collector: acc.address
+        fee_bps: feeBps,      
+        fee_collector: collector 
     };
 }
 
-async function declareAndDeployConcLiquidityVault() {
+async function declareAndDeployConcLiquidityVault(
+    token0: string, 
+    token1: string, 
+    fee: string, 
+    tickSpacing: number, 
+    extension: number,
+    lowerTick: number,
+    upperTick: number,
+    lowerSign: boolean,
+    upperSign: boolean,
+    feeBps: number,
+    collector: string
+) {
     const accessControl = await declareAndDeployAccessControl();
     const { class_hash } = await myDeclare("ConcLiquidityVault", 'strkfarm');
-    const poolKey = createPoolKey(); 
-    const bounds = createBounds();
-    const feeSettings = createFeeSettings();
+    const poolKey = createPoolKey(
+        token0,      
+        token1,          
+        fee, 
+        tickSpacing,     
+        extension          
+    );
+    
+    const bounds = createBounds(
+        lowerTick,      
+        upperTick,
+        lowerSign,
+        upperSign
+    );
+    
+    const feeSettings = createFeeSettings(
+        feeBps,        
+        collector 
+    );
+
     await deployContract("ConcLiquidityVault", class_hash, {
         name: "ConcLiquidityVault",
         symbol: "CLV",
@@ -61,14 +96,5 @@ async function declareAndDeployConcLiquidityVault() {
     });
 }
 
-async function declareAndDeployAccessControl() {
-    const acc = getAccount('strkfarmadmin');
-    const { class_hash } = await myDeclare("AccessControl", 'strkfarm');
-    const tx = await deployContract("AccessControl", class_hash, {
-        owner: acc.address,
-        governor_address: acc.address,
-        relayer_address: acc.address,
-        emergency_address: acc.address
-    });
-    return tx.contract_address;
-}
+// deploy cl vault
+// declareAndDeployConcLiquidityVault(pass values);
