@@ -1,9 +1,11 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
 import * as assert from 'assert'
-import {RawArgs, RpcProvider, TransactionExecutionStatus, extractContractHashes, hash, json, provider} from 'starknet'
+import {Account, RawArgs, RpcProvider, TransactionExecutionStatus, extractContractHashes, hash, json, provider} from 'starknet'
 import { readFileSync, existsSync, writeFileSync } from 'fs'
 import { IConfig, Network, Store, getDefaultStoreConfig } from '@strkfarm/sdk';
+
+const ACCOUNT_NAME = "admin";
 
 export function getRpcProvider(rpcUrl: string | undefined = process.env.RPC_URL) {
     assert(rpcUrl, 'invalid RPC_URL');
@@ -24,20 +26,26 @@ function saveContracts(contracts: any) {
     writeFileSync(PATH, JSON.stringify(contracts));
 }
 
-export function getAccount(accountKey: string) {
-    const config: IConfig = {
-        provider: <any>new RpcProvider({nodeUrl: process.env.RPC_URL}),
-        network: Network.mainnet,
-        stage: 'production'
-    }
-    const storeConfig = getDefaultStoreConfig(Network.mainnet);
-    storeConfig.ACCOUNTS_FILE_NAME = 'accounts-orig.json';
-    const store = new Store(config, {
-        ...storeConfig,
-        PASSWORD: process.env.ACCOUNT_SECURE_PASSWORD || '',
-    });
+// export function getAccount(accountKey: string) {
+//     const config: IConfig = {
+//         provider: <any>new RpcProvider({nodeUrl: process.env.RPC_URL}),
+//         network: Network.mainnet,
+//         stage: 'production'
+//     }
+//     const storeConfig = getDefaultStoreConfig(Network.mainnet);
+//     storeConfig.ACCOUNTS_FILE_NAME = 'accounts-orig.json';
+//     const store = new Store(config, {
+//         ...storeConfig,
+//         PASSWORD: process.env.ACCOUNT_SECURE_PASSWORD || '',
+//     });
     
-    return store.getAccount(accountKey);
+//     return store.getAccount(accountKey);
+// }
+
+export function getAccount(accountKey: string) {
+    const rpc = getRpcProvider(process.env.RPC_URL)
+    return new Account(rpc, process.env.ACCOUNT_ADDRESS!, process.env.ACCOUNT_SECURE_PASSWORD!)
+    //  process.env.ACCOUNT_ADDRESS
 }
 
 export async function myDeclare(contract_name: string, package_name: string = 'strkfarm') {

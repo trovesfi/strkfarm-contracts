@@ -97,4 +97,16 @@ async function declareAndDeployConcLiquidityVault(
 }
 
 // deploy cl vault
-// declareAndDeployConcLiquidityVault(pass values);
+declareAndDeployConcLiquidityVault(
+    "jfjf",
+    "jfjf",
+    "fjf",
+    12,
+    12,
+    12,
+    12,
+    true,
+    true,
+    12,
+    "jff"
+);
