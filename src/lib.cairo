@@ -1,4 +1,4 @@
-mod helpers {
+pub mod helpers {
     pub mod ERC20Helper;
     pub mod Math;
     pub mod pow;
@@ -6,7 +6,7 @@ mod helpers {
     pub mod constants;
 }
 
-mod components {
+pub mod components {
     pub mod harvester {
         pub mod harvester_lib;
         pub mod defi_spring_ekubo_style;
@@ -22,7 +22,7 @@ mod components {
     pub mod accessControl;
 }
 
-mod interfaces {
+pub mod interfaces {
     pub mod swapcomp;
     pub mod oracle;
     pub mod common;
@@ -36,7 +36,7 @@ mod interfaces {
     pub mod ERC4626Strategy;
 }
 
-mod strategies {
+pub mod strategies {
     pub mod vesu_rebalance {
         pub mod interface;
         pub mod vesu_rebalance;
