@@ -22,6 +22,8 @@ assert_macros = "2.8.4"
 [[target.starknet-contract]]
 casm = true
 
+[lib]
+
 [scripts]
 test = "snforge test --max-n-steps 30000000"
 buildr = "scarb --profile release build"
