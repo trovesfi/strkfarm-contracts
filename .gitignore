@@ -5,3 +5,4 @@ snfoundry_trace
 .snfoundry_versioned_programs
 coverage
 coverage_report
+node_modules
