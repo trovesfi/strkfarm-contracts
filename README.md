@@ -1,11 +1,13 @@
-# Ekubo Concentrated Liquidity Vault
+# STRKFarm Contracts
+
+## Ekubo Concentrated Liquidity Vault
 
 Automated concentrated liquidity management protocol for Ekubo AMM, combining dynamic position management with fee auto-compounding and STRK reward harvesting.
 
-## How It Works
+### How It Works
 The vault lets users deposit token pairs into optimized liquidity positions on Ekubo. Using ERC-4626 share mechanics, it automatically reinvests earned fees back into the position and handles complex operations like reward harvesting. Governance-controlled rebalancing maintains optimal price bounds while role-based security restricts critical operations. The system tracks positions via NFT ownership and enforces strict precision checks for capital efficiency.
 
-## Key Functions
+## Core Operations
 
 ### `deposit(amount0, amount1)` 💰
 - Converts token amounts to liquidity shares
