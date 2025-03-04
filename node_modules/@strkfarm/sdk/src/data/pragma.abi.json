@@ -1,0 +1,96 @@
+[
+    {
+      "data": [
+        {
+          "name": "previousOwner",
+          "type": "felt"
+        },
+        {
+          "name": "newOwner",
+          "type": "felt"
+        }
+      ],
+      "keys": [],
+      "name": "OwnershipTransferred",
+      "type": "event"
+    },
+    {
+      "data": [
+        {
+          "name": "token",
+          "type": "felt"
+        },
+        {
+          "name": "source",
+          "type": "felt"
+        }
+      ],
+      "keys": [],
+      "name": "TokenSourceChanged",
+      "type": "event"
+    },
+    {
+      "name": "constructor",
+      "type": "constructor",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "felt"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "get_price",
+      "type": "function",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "felt"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "price",
+          "type": "felt"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "name": "get_price_with_time",
+      "type": "function",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "felt"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "price",
+          "type": "felt"
+        },
+        {
+          "name": "update_time",
+          "type": "felt"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "name": "set_token_source",
+      "type": "function",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "felt"
+        },
+        {
+          "name": "source",
+          "type": "felt"
+        }
+      ],
+      "outputs": []
+    }
+  ]
