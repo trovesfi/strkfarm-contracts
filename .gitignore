@@ -7,3 +7,4 @@ coverage
 coverage_report
 node_modules
 .env
+class_hashes.json
