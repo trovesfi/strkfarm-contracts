@@ -1,5 +1,6 @@
 import { deployContract, getAccount, getRpcProvider, myDeclare } from "../lib/utils";
-import { EKUBO_POSITIONS, EKUBO_CORE, EKUBO_POSITIONS_NFT, ORACLE_OURS, wstETH, ETH, ACCESS_CONTROL} from "../lib/constants";
+import { EKUBO_POSITIONS, EKUBO_CORE, EKUBO_POSITIONS_NFT, ORACLE_OURS, wstETH, ETH, ACCESS_CONTROL, xSTRK, STRK} from "../lib/constants";
+import { byteArray, uint256 } from "starknet";
 
 // Added parameters for pool configuration
 function createPoolKey(
@@ -18,22 +19,35 @@ function createPoolKey(
     };
 }
 
+interface Tick {
+    mag: number;
+    sign: number;
+}
+
 function createBounds(
-    lowerTick: number,
-    upperTick: number,
-    loweSign: boolean,
-    upperSign: boolean
+    lowerBound: Tick,
+    upperBound: Tick
 ) {
     return {
-        lower: {
-            mag: lowerTick, 
-            sign: loweSign     
-        },
-        upper: {
-            mag: upperTick, 
-            sign: upperSign
-        }
+        lower: lowerBound,
+        upper: upperBound
     };
+}
+
+function priceToTick(price: number, isRoundDown: boolean) {
+    const value = isRoundDown ? Math.floor(Math.log(price) / Math.log(1.000001)) : Math.ceil(Math.log(price) / Math.log(1.000001));
+
+    if (value < 0) {
+        return {
+            mag: -value,
+            sign: 1
+        };
+    } else {
+        return {
+            mag: value,
+            sign: 0
+        };
+    }
 }
 
 function createFeeSettings(
@@ -41,49 +55,30 @@ function createFeeSettings(
     collector: string
 ) {
     return {
-        fee_bps: feeBps,      
+        fee_bps: uint256.bnToUint256(feeBps.toString()),      
         fee_collector: collector 
     };
 }
 
 async function declareAndDeployConcLiquidityVault(
-    token0: string, 
-    token1: string, 
-    fee: string, 
-    tickSpacing: number, 
-    extension: number,
-    lowerTick: number,
-    upperTick: number,
-    lowerSign: boolean,
-    upperSign: boolean,
+    poolKey: ReturnType<typeof createPoolKey>,
+    bounds: ReturnType<typeof createBounds>,
     feeBps: number,
-    collector: string
+    collector: string,
+    name: string,
+    symbol: string,
 ) {
     const accessControl = ACCESS_CONTROL;
-    const { class_hash } = await myDeclare("ConcLiquidityVault");
-    const poolKey = createPoolKey(
-        token0,      
-        token1,          
-        fee, 
-        tickSpacing,     
-        extension          
-    );
-    
-    const bounds = createBounds(
-        lowerTick,      
-        upperTick,
-        lowerSign,
-        upperSign
-    );
-    
+    // const { class_hash } = await myDeclare("ConcLiquidityVault");
+    const class_hash = '0x11fe7c8d6577bcae7f731a56fbf8f19637ba13142fcf36ce06bdc636a321e7a'
     const feeSettings = createFeeSettings(
         feeBps,        
         collector 
     );
 
     await deployContract("ConcLiquidityVault", class_hash, {
-        name: "ConcLiquidityVault",
-        symbol: "CLV",
+        name: byteArray.byteArrayFromString(name),
+        symbol: byteArray.byteArrayFromString(symbol),
         access_control: accessControl,
         ekubo_positions_contract: EKUBO_POSITIONS,
         bounds_settings: bounds,
@@ -92,24 +87,31 @@ async function declareAndDeployConcLiquidityVault(
         ekubo_core: EKUBO_CORE,
         oracle: ORACLE_OURS,
         fee_settings: feeSettings
-    });
+    }, symbol);
 }
 
-// deploy cl vault
-declareAndDeployConcLiquidityVault(
-    "jfjf",
-    "jfjf",
-    "fjf",
-    12,
-    12,
-    12,
-    12,
-    true,
-    true,
-    12,
-    "jff"
-);
 
 if (require.main === module) {
+    // deploy cl vault
+    const poolKey = createPoolKey(
+        xSTRK,
+        STRK,
+        '34028236692093847977029636859101184',
+        200,
+        0
+    );
 
+    const bounds = createBounds(
+        priceToTick(1.035, true),
+        priceToTick(1.03603, false)
+    );
+
+    declareAndDeployConcLiquidityVault(
+        poolKey,
+        bounds,
+        1000, // 10% fee
+        "0x06419f7DeA356b74bC1443bd1600AB3831b7808D1EF897789FacFAd11a172Da7", // fee collector
+        "STRKFarm Ekubo xSTRK/STRK",
+        "frmEkXSTRKSTRK",
+     );
 }

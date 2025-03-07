@@ -90,7 +90,7 @@ export async function myDeclare(contract_name: string, package_name: string = 's
     return tx;
 }
 
-export async function deployContract(contract_name: string, classHash: string, constructorData: RawArgs) {
+export async function deployContract(contract_name: string, classHash: string, constructorData: RawArgs, sub_contract_name: string = '') {
     const provider = getRpcProvider();
     const acc = getAccount(ACCOUNT_NAME);
 
@@ -100,13 +100,14 @@ export async function deployContract(contract_name: string, classHash: string, c
     })
     console.log("Deploy fee", contract_name, Number(fee.suggestedMaxFee) / 10 ** 18, 'ETH')
 
-    return deploy(classHash, constructorData, contract_name);
+    return deploy(classHash, constructorData, contract_name, sub_contract_name);
 }
 
 export async function deploy(
     classHash: string,
     constructorData: RawArgs,
-    contract_name: string
+    contract_name: string,
+    sub_contract_name: string = ''
 ) {
     const provider = getRpcProvider();
     const acc = getAccount(ACCOUNT_NAME);
@@ -122,7 +123,14 @@ export async function deploy(
     if (!contracts.contracts) {
         contracts['contracts'] = {};
     }
-    contracts.contracts[contract_name] = tx.contract_address;
+    if (sub_contract_name) {
+        if (!contracts.contracts[contract_name]) {
+            contracts.contracts[contract_name] = {};
+        }
+        contracts.contracts[contract_name][sub_contract_name] = tx.contract_address;
+    } else {
+        contracts.contracts[contract_name] = tx.contract_address;
+    }
     saveContracts(contracts);
     console.log(`Contract deployed: ${contract_name}`)
     console.log(`Address: ${tx.contract_address}`)
