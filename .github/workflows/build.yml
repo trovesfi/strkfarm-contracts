@@ -1,0 +1,58 @@
+name: build and create release
+
+on:
+  push:
+    tags:
+      - "v*"   # Matches v1.0, v2.3.4, etc.
+permissions: read-all
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Starknet Foundry
+        uses: foundry-rs/setup-snfoundry@v3
+        with: 
+          starknet-foundry-version: 0.32.0
+
+      - uses: actions/checkout@v3
+
+      - uses: software-mansion/setup-scarb@v1
+        with:
+          scarb-version: "2.8.4"
+
+      - name: Install dependencies
+        run: npm install
+
+      - run: scarb run buildr
+
+      - name: Create classhashes
+        run: npx tsx scripts/lib/generate_classhashes.ts
+
+      - name: Zip the target folder
+        run: zip -r release.zip target/release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          tag_name: ${{ github.ref }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          token: ${{ secrets.PAT }}
+          files: |
+            release.zip
+            class_hashes.json
+
+# Create new tags
+# 1. Commit the code
+# 2. Bump version in scarb.toml
+# 3. Create a new tag with new version: `git tag -a v1.0.0 -m "Release version 1.0.0"`
+# 4. Push the tag to the repository: `git push origin v1.0.0`
