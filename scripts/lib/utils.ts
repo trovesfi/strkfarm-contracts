@@ -1,9 +1,10 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
-import {Account, RawArgs, RpcProvider, TransactionExecutionStatus, extractContractHashes, hash, json, provider} from 'starknet'
+import {Account, Call, RawArgs, RpcProvider, TransactionExecutionStatus, Uint256, extractContractHashes, hash, json, provider, uint256} from 'starknet'
 import { readFileSync, existsSync, writeFileSync } from 'fs'
 import { IConfig, Network, Store, getDefaultStoreConfig } from '@strkfarm/sdk';
 import assert from 'assert';
+import { fetchBuildExecuteTransaction, fetchQuotes } from "@avnu/avnu-sdk";
 
 export const ACCOUNT_NAME = "strkfarmadmin";
 
@@ -135,4 +136,80 @@ export async function deploy(
     console.log(`Contract deployed: ${contract_name}`)
     console.log(`Address: ${tx.contract_address}`)
     return tx;
+}
+
+export interface Route {
+    token_from: string,
+    token_to: string,
+    exchange_address: string,
+    percent: number,
+    additional_swap_params: string[]
+}
+
+export interface SwapInfo {
+    token_from_address: string, 
+    token_from_amount: Uint256, 
+    token_to_address: string,   
+    token_to_amount: Uint256, 
+    token_to_min_amount: Uint256,  
+    beneficiary: string,  
+    integrator_fee_amount_bps: number,
+    integrator_fee_recipient: string,
+    routes: Route[]
+}
+
+export async function getSwapInfo(
+    fromToken: string,
+    toToken: string,
+    amountWei: string,
+    taker: string,
+    minAmount = "0"
+) {
+    const params: any = {
+        sellTokenAddress: fromToken,
+        buyTokenAddress: toToken,
+        sellAmount: amountWei,
+        takerAddress: taker,
+    };
+    // console.log(params);
+    const routes: Route[] = [];
+    if (fromToken != toToken) {
+        const quotes = await fetchQuotes(params);
+        assert(quotes.length > 0, 'No quotes found');
+        // console.log(quotes);
+        const calldata = await  fetchBuildExecuteTransaction(quotes[0].quoteId);
+        // console.log(calldata.calls[1].calldata);
+        const call: Call = calldata.calls[1];
+        const callData: string[] = call.calldata as string[];
+        const routesLen: number = Number(callData[11]);
+        assert(routesLen > 0, 'No routes found');
+
+        let startIndex = 12;
+        for(let i=0; i<routesLen; ++i) {
+            const swap_params_len = Number(callData[startIndex + 4]);
+            const route: Route = {
+                token_from: callData[startIndex],
+                token_to: callData[startIndex + 1],
+                exchange_address: callData[startIndex + 2],
+                percent: Number(callData[startIndex + 3]),
+                additional_swap_params: swap_params_len > 0 ? callData.slice(startIndex + 5, startIndex + 5 + swap_params_len): []
+            }
+            routes.push(route);
+            startIndex += 5 + swap_params_len;
+        }
+    }
+    // console.log(routes);
+    const swapInfo: SwapInfo = {
+        token_from_address: fromToken, 
+        token_from_amount: uint256.bnToUint256(amountWei),
+        token_to_address: toToken,
+        token_to_amount: uint256.bnToUint256("0"), 
+        token_to_min_amount: uint256.bnToUint256(minAmount),
+        beneficiary: taker,
+        integrator_fee_amount_bps: 0,
+        integrator_fee_recipient: taker,
+        routes
+    };
+
+    return swapInfo;
 }

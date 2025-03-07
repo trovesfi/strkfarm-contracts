@@ -1,6 +1,6 @@
-import { deployContract, getAccount, getRpcProvider, myDeclare } from "../lib/utils";
+import { ACCOUNT_NAME, deployContract, getAccount, getRpcProvider, getSwapInfo, myDeclare } from "../lib/utils";
 import { EKUBO_POSITIONS, EKUBO_CORE, EKUBO_POSITIONS_NFT, ORACLE_OURS, wstETH, ETH, ACCESS_CONTROL, xSTRK, STRK} from "../lib/constants";
-import { byteArray, uint256 } from "starknet";
+import { byteArray, Contract, TransactionExecutionStatus, uint256 } from "starknet";
 
 // Added parameters for pool configuration
 function createPoolKey(
@@ -26,7 +26,7 @@ interface Tick {
 
 function createBounds(
     lowerBound: Tick,
-    upperBound: Tick
+    upperBound: Tick,
 ) {
     return {
         lower: lowerBound,
@@ -34,17 +34,17 @@ function createBounds(
     };
 }
 
-function priceToTick(price: number, isRoundDown: boolean) {
+function priceToTick(price: number, isRoundDown: boolean, tickSpacing: number) {
     const value = isRoundDown ? Math.floor(Math.log(price) / Math.log(1.000001)) : Math.ceil(Math.log(price) / Math.log(1.000001));
-
-    if (value < 0) {
+    const tick = Math.floor(value / tickSpacing) * tickSpacing;
+    if (tick < 0) {
         return {
-            mag: -value,
+            mag: -tick,
             sign: 1
         };
     } else {
         return {
-            mag: value,
+            mag: tick,
             sign: 0
         };
     }
@@ -90,6 +90,38 @@ async function declareAndDeployConcLiquidityVault(
     }, symbol);
 }
 
+async function rebalance() {
+    // ! Ensure correct contract address
+    const addr = '0x60bf566a17e5f3e82e21bf6a8cc2ed7956c867eb937e74c474b1ced2b403c58';
+    const provider = getRpcProvider();
+    const cls = await provider.getClassAt(addr);
+    const contract = new Contract(cls.abi, addr, provider);
+
+    // ! Ensure correct bounds
+    const bounds = createBounds(
+        priceToTick(1.033, true, 200),
+        priceToTick(1.036, false, 200)
+    );
+    const swapInfo = await getSwapInfo(
+        xSTRK,
+        STRK,
+        "0",
+       addr,
+        "0"
+    );
+    swapInfo.routes = []; // ! Add routes later
+    const call = contract.populate('rebalance', [
+        bounds,
+        swapInfo
+    ]);
+    const acc = getAccount(ACCOUNT_NAME);
+    const tx = await acc.execute([call]);
+    console.log('Rebalance tx: ', tx.transaction_hash);
+    await provider.waitForTransaction(tx.transaction_hash, {
+        successStates: [TransactionExecutionStatus.SUCCEEDED]
+    })
+    console.log('Rebalance done');
+}
 
 if (require.main === module) {
     // deploy cl vault
@@ -102,8 +134,8 @@ if (require.main === module) {
     );
 
     const bounds = createBounds(
-        priceToTick(1.035, true),
-        priceToTick(1.03603, false)
+        priceToTick(1.033, true, 200),
+        priceToTick(1.03603, false, 200)
     );
 
     declareAndDeployConcLiquidityVault(
@@ -114,4 +146,5 @@ if (require.main === module) {
         "STRKFarm Ekubo xSTRK/STRK",
         "frmEkXSTRKSTRK",
      );
+    // rebalance();
 }

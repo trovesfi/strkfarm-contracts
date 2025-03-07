@@ -46,6 +46,13 @@ jobs:
           name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false
+          token: ${{ secrets.PAT }}
           files: |
             release.zip
             class_hashes.json
+
+# Create new tags
+# 1. Commit the code
+# 2. Bump version in scarb.toml
+# 3. Create a new tag with new version: `git tag -a v1.0.0 -m "Release version 1.0.0"`
+# 4. Push the tag to the repository: `git push origin v1.0.0`
