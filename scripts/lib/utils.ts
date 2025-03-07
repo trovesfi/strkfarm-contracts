@@ -1,11 +1,11 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
-import * as assert from 'assert'
 import {Account, RawArgs, RpcProvider, TransactionExecutionStatus, extractContractHashes, hash, json, provider} from 'starknet'
 import { readFileSync, existsSync, writeFileSync } from 'fs'
 import { IConfig, Network, Store, getDefaultStoreConfig } from '@strkfarm/sdk';
+import assert from 'assert';
 
-const ACCOUNT_NAME = "admin";
+export const ACCOUNT_NAME = "strkfarmadmin";
 
 export function getRpcProvider(rpcUrl: string | undefined = process.env.RPC_URL) {
     assert(rpcUrl, 'invalid RPC_URL');
@@ -26,29 +26,29 @@ function saveContracts(contracts: any) {
     writeFileSync(PATH, JSON.stringify(contracts));
 }
 
-// export function getAccount(accountKey: string) {
-//     const config: IConfig = {
-//         provider: <any>new RpcProvider({nodeUrl: process.env.RPC_URL}),
-//         network: Network.mainnet,
-//         stage: 'production'
-//     }
-//     const storeConfig = getDefaultStoreConfig(Network.mainnet);
-//     storeConfig.ACCOUNTS_FILE_NAME = 'accounts-orig.json';
-//     const store = new Store(config, {
-//         ...storeConfig,
-//         PASSWORD: process.env.ACCOUNT_SECURE_PASSWORD || '',
-//     });
-    
-//     return store.getAccount(accountKey);
-// }
-
 export function getAccount(accountKey: string) {
-    const rpc = getRpcProvider(process.env.RPC_URL)
-    return new Account(rpc, process.env.ACCOUNT_ADDRESS!, process.env.ACCOUNT_SECURE_PASSWORD!)
-    //  process.env.ACCOUNT_ADDRESS
+    const config: IConfig = {
+        provider: <any>new RpcProvider({nodeUrl: process.env.RPC_URL}),
+        network: Network.mainnet,
+        stage: 'production'
+    }
+    const storeConfig = getDefaultStoreConfig(Network.mainnet);
+    storeConfig.ACCOUNTS_FILE_NAME = 'accounts-orig.json';
+    const store = new Store(config, {
+        ...storeConfig,
+        PASSWORD: process.env.ACCOUNT_SECURE_PASSWORD || '',
+    });
+    
+    return store.getAccount(accountKey);
 }
 
-export async function myDeclare(contract_name: string, package_name: string = 'strkfarm') {
+// export function getAccount(accountKey: string) {
+//     const rpc = getRpcProvider(process.env.RPC_URL)
+//     return new Account(rpc, process.env.ACCOUNT_ADDRESS!, process.env.ACCOUNT_SECURE_PASSWORD!)
+//     //  process.env.ACCOUNT_ADDRESS
+// }
+
+export async function myDeclare(contract_name: string, package_name: string = 'strkfarm_contracts') {
     const provider = getRpcProvider();
     const acc = getAccount(ACCOUNT_NAME);
     const compiledSierra = json.parse(

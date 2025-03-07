@@ -1,5 +1,5 @@
+import { ACCESS_CONTROL } from "../lib/constants";
 import { deployContract, getAccount, myDeclare } from "../lib/utils";
-import { declareAndDeployAccessControl } from "../access_control/deploy_access_control";
 
 type PoolConfig = {
     pool_id: string; 
@@ -28,8 +28,8 @@ async function deployVesuRebalance(
     protocolConfig: ProtocolConfig,
     accessControl?: string
 ) {
-    const { class_hash } = await myDeclare("VesuRebalance", 'strkfarm');
-    const controller = accessControl || await declareAndDeployAccessControl();
+    const { class_hash } = await myDeclare("VesuRebalance");
+    const controller = accessControl || ACCESS_CONTROL;
     
     await deployContract("VesuRebalance", class_hash, {
         asset,

@@ -1,6 +1,5 @@
 import { deployContract, getAccount, getRpcProvider, myDeclare } from "../lib/utils";
-import { EKUBO_POSITIONS, EKUBO_CORE, EKUBO_POSITIONS_NFT, ORACLE_OURS, wstETH, ETH} from "../lib/constants";
-import { declareAndDeployAccessControl } from "../access_control/deploy_access_control";
+import { EKUBO_POSITIONS, EKUBO_CORE, EKUBO_POSITIONS_NFT, ORACLE_OURS, wstETH, ETH, ACCESS_CONTROL} from "../lib/constants";
 
 // Added parameters for pool configuration
 function createPoolKey(
@@ -60,8 +59,8 @@ async function declareAndDeployConcLiquidityVault(
     feeBps: number,
     collector: string
 ) {
-    const accessControl = await declareAndDeployAccessControl();
-    const { class_hash } = await myDeclare("ConcLiquidityVault", 'strkfarm');
+    const accessControl = ACCESS_CONTROL;
+    const { class_hash } = await myDeclare("ConcLiquidityVault");
     const poolKey = createPoolKey(
         token0,      
         token1,          
@@ -110,3 +109,7 @@ declareAndDeployConcLiquidityVault(
     12,
     "jff"
 );
+
+if (require.main === module) {
+
+}
