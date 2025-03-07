@@ -1,1 +1,12 @@
-{"class_hashes":{"AccessControl":"0x34d43f14f7a56fb3f9069c26084b62a1fd918c1b776ab81a5bfcb0481c72a2e","ConcLiquidityVault":"0x11fe7c8d6577bcae7f731a56fbf8f19637ba13142fcf36ce06bdc636a321e7a"},"contracts":{"AccessControl":"0x636a3f51cc37f5729e4da4b1de6a8549a28f3c0d5bf3b17f150971e451ff9c2","ConcLiquidityVault":{"frmEkXSTRKSTRK":"0x1f083b98674bc21effee29ef443a00c7b9a500fd92cf30341a3da12c73f2324"}}}
+{
+    "class_hashes": {
+        "AccessControl": "0x34d43f14f7a56fb3f9069c26084b62a1fd918c1b776ab81a5bfcb0481c72a2e",
+        "ConcLiquidityVault": "0x11fe7c8d6577bcae7f731a56fbf8f19637ba13142fcf36ce06bdc636a321e7a"
+    },
+    "contracts": {
+        "AccessControl": "0x636a3f51cc37f5729e4da4b1de6a8549a28f3c0d5bf3b17f150971e451ff9c2",
+        "ConcLiquidityVault": {
+            "frmEkXSTRKSTRK": "0x1f083b98674bc21effee29ef443a00c7b9a500fd92cf30341a3da12c73f2324"
+        }
+    }
+}
