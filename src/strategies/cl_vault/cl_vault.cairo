@@ -407,6 +407,8 @@ mod ConcLiquidityVault {
                 rewardsContract: contract_address_const::<0>()
             };
 
+            let rewardToken = constants::STRK_ADDRESS();
+            let pre_bal = ERC20Helper::balanceOf(rewardToken, get_contract_address());
             config
                 .simple_harvest(
                     ref self,
@@ -417,6 +419,7 @@ mod ConcLiquidityVault {
                     swapInfo1.clone(), // doesnt do anything anyways
                     IPriceOracleDispatcher { contract_address: self.oracle.read() }
                 );
+            let post_bal = ERC20Helper::balanceOf(rewardToken, get_contract_address());
 
             // validate swap info
             // aim to swap 100% of STRK into token0 and token1
@@ -432,11 +435,9 @@ mod ConcLiquidityVault {
                 'invalid token from address [2]'
             );
             assert(swapInfo2.token_to_address == token1, 'invalid token to address [2]');
-            let STRK_bal = ERC20Helper::balanceOf(
-                constants::STRK_ADDRESS(), get_contract_address()
-            );
+            let strk_amt = post_bal - pre_bal;
             assert(
-                swapInfo1.token_from_amount + swapInfo2.token_from_amount == STRK_bal,
+                swapInfo1.token_from_amount + swapInfo2.token_from_amount == strk_amt,
                 'invalid STRK balance'
             );
 
