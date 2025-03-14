@@ -146,9 +146,9 @@ mod VesuRebalance {
     ) {
         self.erc4626.initializer(asset);
         self.common.initializer(access_control);
-        self.set_allowed_pools(allowed_pools);
+        self._set_pool_settings(allowed_pools);
 
-        self.set_settings(settings);
+        self.settings.write(settings);
         self.vesu_settings.write(vesu_settings);
 
         // default index 10**18 (i.e. 1)
