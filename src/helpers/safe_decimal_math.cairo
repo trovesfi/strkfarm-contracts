@@ -62,7 +62,7 @@ fn u256_to_address(token_id: u256) -> ContractAddress {
     token_id_felt.try_into().unwrap()
 }
 
-pub fn safe_subtract(a: u256, b: u256) -> u256 {
+pub fn non_negative_sub(a: u256, b: u256) -> u256 {
     if a < b {
         return 0;
     }
