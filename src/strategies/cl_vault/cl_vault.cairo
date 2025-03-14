@@ -398,6 +398,7 @@ mod ConcLiquidityVault {
         ) {
             self.common.assert_not_paused();
             assert(self.is_incentives_on.read(), 'incentives are off');
+            self.common.assert_relayer_role();
 
             let ekuboSettings = EkuboStyleClaimSettings { rewardsContract: rewardsContract, };
             let config = HarvestConfig {};

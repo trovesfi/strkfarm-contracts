@@ -313,6 +313,8 @@ mod VesuRebalance {
             swapInfo: AvnuMultiRouteSwap
         ) {
             self.common.assert_not_paused();
+            self.common.assert_relayer_role();
+
             let vesuSettings = SNFStyleClaimSettings { rewardsContract: rewardsContract, };
             let config = HarvestConfig {};
             // just dummy config, not used

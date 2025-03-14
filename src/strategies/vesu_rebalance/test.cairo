@@ -551,6 +551,28 @@ pub mod test_vesu_rebalance {
         assert(user2_balance > amount, 'deposit should include rewards');
     }
 
+    #[test]
+    #[should_panic(expected: ('Access: Missing relayer role',))]
+    #[fork("mainnet_1134787")]
+    fn test_vesu_harvest_no_auth() {
+        let block = 100;
+        start_cheat_block_number_global(block);
+
+        let snf_defi_spring = test_utils::deploy_snf_spring_ekubo();
+        let amount = 1000 * pow::ten_pow(18);
+
+        // Deploy the mock DefiSpringSNF contract
+        let (vesu_address, vesu_vault, _) = deploy_vesu_vault();
+        let claim = Claim {
+            id: 0, amount: pow::ten_pow(18).try_into().unwrap(), claimee: vesu_address
+        };
+        let swap_params = STRKETHAvnuSwapInfo(claim.amount.into(), vesu_address);
+        let proofs: Array<felt252> = array![1];
+        start_cheat_caller_address(vesu_address, constants::USER2_ADDRESS());
+        vesu_vault.harvest(snf_defi_spring.contract_address, claim, proofs.span(), swap_params);
+        stop_cheat_caller_address(vesu_address);
+    }
+
     fn STRKETHAvnuSwapInfo(amount: u256, beneficiary: ContractAddress) -> AvnuMultiRouteSwap {
         let additional1: Array<felt252> = array![
             constants::STRK_ADDRESS().into(),

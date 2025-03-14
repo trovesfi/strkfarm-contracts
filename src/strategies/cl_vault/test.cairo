@@ -998,6 +998,35 @@ pub mod test_cl_vault {
         assert(bal0_vault < 1000000000000, 'invalid wst amount');
         assert(bal1_vault < 1000000000000, 'invalid eth amount');
     }
+    
+    #[test]
+    #[should_panic(expected: ('Access: Missing relayer role',))]
+    #[fork("mainnet_1165999")]
+    fn test_harvest_cl_vault_no_auth() {
+        let block = 100;
+        start_cheat_block_number_global(block);
+
+        let (clVault, _) = deploy_cl_vault();
+        let ekubo_defi_spring = test_utils::deploy_defi_spring_ekubo();
+
+        let claim = Claim {
+            id: 0, amount: pow::ten_pow(18).try_into().unwrap(), claimee: clVault.contract_address,
+        };
+        let post_fee_amount: u128 = claim.amount - (claim.amount / 10);
+        let amt0 = 100000 * post_fee_amount.into() / 1383395;
+        let amt1 = post_fee_amount.into() - amt0;
+        let swap_params1 = STRKWSTAvnuSwapInfo(amt0, clVault.contract_address);
+        let swap_params2 = STRKETHAvnuSwapInfo(amt1, clVault.contract_address);
+        let proofs: Array<felt252> = array![1];
+   
+        start_cheat_caller_address(clVault.contract_address, constants::EKUBO_USER_ADDRESS());
+        clVault
+            .harvest(
+                ekubo_defi_spring.contract_address, claim, proofs.span(), swap_params1, swap_params2
+            );
+        stop_cheat_caller_address(clVault.contract_address);
+    }
+
 
     fn STRKETHAvnuSwapInfo(amount: u256, beneficiary: ContractAddress) -> AvnuMultiRouteSwap {
         let additional1: Array<felt252> = array![
