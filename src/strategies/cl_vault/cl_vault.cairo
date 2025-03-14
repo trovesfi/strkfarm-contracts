@@ -436,6 +436,7 @@ mod ConcLiquidityVault {
             );
             assert(swapInfo2.token_to_address == token1, 'invalid token to address [2]');
             let strk_amt = post_bal - pre_bal;
+            assert(strk_amt > 0, 'No harvest amt');
             assert(
                 swapInfo1.token_from_amount + swapInfo2.token_from_amount == strk_amt,
                 'invalid STRK balance'
