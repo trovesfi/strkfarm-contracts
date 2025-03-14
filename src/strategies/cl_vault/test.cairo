@@ -881,6 +881,32 @@ pub mod test_cl_vault {
     }
 
     #[test]
+    #[fork("mainnet_1134787")]
+    #[should_panic(expected: ('Access: Missing relayer role',))]
+    fn test_handle_ununsed_no_auth() {
+        let (clVault, _) = deploy_cl_vault();
+
+        let mut eth_route = get_eth_wst_route();
+        eth_route.percent = 1000000000000;
+        let swap_params = AvnuMultiRouteSwap {
+            token_from_address: eth_route.clone().token_from,
+            // got amont from trail and error
+            token_from_amount: 2744 * pow::ten_pow(18) / 1000,
+            token_to_address: constants::STRK_ADDRESS(),
+            token_to_amount: 0,
+            token_to_min_amount: 0,
+            beneficiary: clVault.contract_address,
+            integrator_fee_amount_bps: 0,
+            integrator_fee_recipient: contract_address_const::<0x00>(),
+            routes: array![]
+        };
+
+        start_cheat_caller_address(clVault.contract_address, constants::EKUBO_USER_ADDRESS());
+        clVault.handle_unused(swap_params);
+        stop_cheat_caller_address(clVault.contract_address);
+    }
+
+    #[test]
     #[fork("mainnet_1165999")]
     fn test_harvest_cl_vault() {
         let block = 100;

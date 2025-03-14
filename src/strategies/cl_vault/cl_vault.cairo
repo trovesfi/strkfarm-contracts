@@ -580,6 +580,7 @@ mod ConcLiquidityVault {
         /// before deposit.
         /// @param swap_params Parameters for swapping tokens to balance liquidity before redeposit.
         fn handle_unused(ref self: ContractState, swap_params: AvnuMultiRouteSwap) {
+            self.common.assert_relayer_role();
             let this = get_contract_address();
             let pool_key = self.pool_key.read();
             assert(
