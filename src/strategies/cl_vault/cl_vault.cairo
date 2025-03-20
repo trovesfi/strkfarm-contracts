@@ -258,12 +258,12 @@ mod ConcLiquidityVault {
             // withdraw
             let (amt0, amt1) = self._withdraw_position(userPosition.liquidity.try_into().unwrap());
 
+            // burn shares
+            self.erc20.burn(caller, shares);
+            
             // transfer proceeds to receiver
             ERC20Helper::transfer(pool_key.token0, receiver, amt0.into());
             ERC20Helper::transfer(pool_key.token1, receiver, amt1.into());
-
-            // burn shares
-            self.erc20.burn(caller, shares);
 
             let current_liq = self.get_position().liquidity;
             if (current_liq == 0) {
