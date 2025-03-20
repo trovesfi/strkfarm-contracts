@@ -559,7 +559,7 @@ pub mod test_vesu_rebalance {
         start_cheat_block_number_global(block);
 
         let snf_defi_spring = test_utils::deploy_snf_spring_ekubo();
-        let amount = 1000 * pow::ten_pow(18);
+        let _amount = 1000 * pow::ten_pow(18);
 
         // Deploy the mock DefiSpringSNF contract
         let (vesu_address, vesu_vault, _) = deploy_vesu_vault();

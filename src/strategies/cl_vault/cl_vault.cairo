@@ -3,7 +3,6 @@ mod ConcLiquidityVault {
     use core::option::OptionTrait;
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess,};
     use openzeppelin::security::pausable::{PausableComponent};
-    use openzeppelin::access::ownable::ownable::OwnableComponent;
     use openzeppelin::security::reentrancyguard::{ReentrancyGuardComponent};
     use openzeppelin::upgrades::upgradeable::UpgradeableComponent;
     use ekubo::types::pool_price::PoolPrice;
@@ -29,7 +28,6 @@ mod ConcLiquidityVault {
     use strkfarm_contracts::components::harvester::defi_spring_default_style::{
         SNFStyleClaimSettings, ClaimImpl as DefaultClaimImpl
     };
-    use strkfarm_contracts::components::ekuboSwap::{ekuboSwapImpl};
     use strkfarm_contracts::components::harvester::harvester_lib::HarvestBeforeHookResult;
     use strkfarm_contracts::helpers::ERC20Helper;
     use strkfarm_contracts::interfaces::oracle::{IPriceOracleDispatcher};
@@ -54,7 +52,6 @@ mod ConcLiquidityVault {
 
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
-    component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
     component!(path: ReentrancyGuardComponent, storage: reng, event: ReentrancyGuardEvent);
     component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
@@ -105,8 +102,6 @@ mod ConcLiquidityVault {
         #[substorage(v0)]
         src5: SRC5Component::Storage,
         #[substorage(v0)]
-        ownable: OwnableComponent::Storage,
-        #[substorage(v0)]
         upgradeable: UpgradeableComponent::Storage,
         #[substorage(v0)]
         pausable: PausableComponent::Storage,
@@ -139,8 +134,6 @@ mod ConcLiquidityVault {
         ERC20Event: ERC20Component::Event,
         #[flat]
         SRC5Event: SRC5Component::Event,
-        #[flat]
-        OwnableEvent: OwnableComponent::Event,
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
         #[flat]

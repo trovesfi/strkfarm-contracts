@@ -33,7 +33,6 @@ pub fn get_nodes(routes: Array<Route>, core: ICoreDispatcher) -> Array<RouteNode
     assert(n_routes > 0, 'EkuboSwap: no routes');
 
     let mut nodes: Array<RouteNode> = array![];
-    let n_routes = routes.len();
     let mut i = 0;
 
     loop {
