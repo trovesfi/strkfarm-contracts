@@ -1,6 +1,6 @@
 import { VesuRebalanceStrategies, VesuRebalance, getMainnetConfig, Global, Pricer, Web3Number, ContractAddr } from '@strkfarm/sdk';
 import { ACCOUNT_NAME, getAccount, getRpcProvider } from '../lib/utils';
-import { Contract, TransactionExecutionStatus, uint256 } from 'starknet';
+import { Account, Contract, TransactionExecutionStatus, uint256 } from 'starknet';
 
 async function main() {
     const contracts = VesuRebalanceStrategies;
@@ -14,11 +14,15 @@ async function main() {
     const vesuRebalance = new VesuRebalance(config, pricer, strategy);
     // console.log(await vesuRebalance.getTVL())
 
-    const acc = getAccount(ACCOUNT_NAME);
+    // const acc = getAccount(ACCOUNT_NAME);
+    const acc = new Account(getRpcProvider(), process.env.ADDRESS!, process.env.PK!, "1", '0x3');
     
-    // const depositCalls = await vesuRebalance.depositCall(
-    //     new Web3Number("1", 18), ContractAddr.from(acc.address)
-    // );
+    const depositCalls = await vesuRebalance.depositCall(
+        new Web3Number("1", 18), ContractAddr.from(acc.address)
+    );
+    console.log(depositCalls)
+    const gas = await acc.estimateInvokeFee(depositCalls);
+    console.log(`Estimated gas: `, gas);
     // const tx = await acc.execute(depositCalls);
     // console.log(tx.transaction_hash);
     // await getRpcProvider().waitForTransaction(tx.transaction_hash, {
@@ -35,14 +39,14 @@ async function main() {
     // const positions = await vesuRebalance.getPools();
     // console.log(`Positions: ${JSON.stringify(positions)}`);
 
-    const netApy = await vesuRebalance.netAPY();
-    console.log(`Net APY: ${JSON.stringify(netApy)}`);
+    // const netApy = await vesuRebalance.netAPY();
+    // console.log(`Net APY: ${JSON.stringify(netApy)}`);
 
-    const {changes, finalPools} = await vesuRebalance.getRebalancedPositions();
-    console.log(`New positions: ${JSON.stringify(changes)}`);
+    // const {changes, finalPools} = await vesuRebalance.getRebalancedPositions();
+    // console.log(`New positions: ${JSON.stringify(changes)}`);
 
-    const _yield = await vesuRebalance.netAPYGivenPools(finalPools);
-    console.log(`new APY: ${JSON.stringify(_yield)}`);
+    // const _yield = await vesuRebalance.netAPYGivenPools(finalPools);
+    // console.log(`new APY: ${JSON.stringify(_yield)}`);
 
     // if (_yield > netApy + 0.01) {
     //     console.log('Rebalancing...');
