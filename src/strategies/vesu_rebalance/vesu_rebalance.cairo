@@ -56,6 +56,7 @@ mod VesuRebalance {
 
     impl CommonInternalImpl = CommonComp::InternalImpl<ContractState>;
     impl ERC4626InternalImpl = ERC4626Component::InternalImpl<ContractState>;
+    impl ERC4626MetadataImpl = ERC4626Component::ERC4626MetadataImpl<ContractState>;
     impl ERC20InternalImpl = ERC20Component::InternalImpl<ContractState>;
     impl ReentrancyGuardInternalImpl = ReentrancyGuardComponent::InternalImpl<ContractState>;
 
@@ -138,6 +139,8 @@ mod VesuRebalance {
     #[constructor]
     fn constructor(
         ref self: ContractState,
+        name: ByteArray,
+        symbol: ByteArray,
         asset: ContractAddress,
         access_control: ContractAddress,
         allowed_pools: Array<PoolProps>,
@@ -145,6 +148,7 @@ mod VesuRebalance {
         vesu_settings: vesuStruct,
     ) {
         self.erc4626.initializer(asset);
+        self.erc20.initializer(name, symbol);
         self.common.initializer(access_control);
         self._set_pool_settings(allowed_pools);
 
@@ -747,15 +751,15 @@ mod VesuRebalance {
         }
 
         fn name(self: @ContractState) -> ByteArray {
-            self.erc20.name()
+            self.erc4626.name()
         }
 
         fn symbol(self: @ContractState) -> ByteArray {
-            self.erc20.symbol()
+            self.erc4626.symbol()
         }
 
         fn decimals(self: @ContractState) -> u8 {
-            self.erc20.decimals()
+            ERC20Helper::decimals(self.asset())
         }
 
         fn totalSupply(self: @ContractState) -> u256 {
@@ -781,8 +785,8 @@ mod VesuRebalance {
     impl ERC4626DefaultLimits<ContractState> of ERC4626Component::LimitConfigTrait<ContractState> {}
 
     impl DefaultConfig of ERC4626Component::ImmutableConfig {
-        const UNDERLYING_DECIMALS: u8 = ERC4626Component::DEFAULT_UNDERLYING_DECIMALS;
-        const DECIMALS_OFFSET: u8 = ERC4626Component::DEFAULT_DECIMALS_OFFSET;
+        const UNDERLYING_DECIMALS: u8 = 0; // Technically not used, as fn decimals() is self.assets().decimals()
+        const DECIMALS_OFFSET: u8 = 0;
     }
 
     impl HooksImpl of ERC4626Component::ERC4626HooksTrait<ContractState> {

@@ -27,6 +27,7 @@ pub mod test_vesu_rebalance {
     use strkfarm_contracts::components::harvester::reward_shares::{
         IRewardShareDispatcher, IRewardShareDispatcherTrait
     };
+    use openzeppelin::utils::serde::SerializedAppend;
 
     fn get_allowed_pools() -> Array<PoolProps> {
         let mut allowed_pools = ArrayTrait::<PoolProps>::new();
@@ -90,13 +91,19 @@ pub mod test_vesu_rebalance {
         }
     }
 
+    fn VAULT_NAME() -> ByteArray { "VesuRebalance" }
+    fn VAULT_SYMBOL() -> ByteArray { "VS" }
+
     fn deploy_vesu_vault() -> (ContractAddress, IVesuRebalDispatcher, IERC4626Dispatcher) {
         let accessControl = test_utils::deploy_access_control();
         let vesu_rebal = declare("VesuRebalance").unwrap().contract_class();
         let allowed_pools = get_allowed_pools();
         let settings = get_settings();
         let vesu_settings = get_vesu_settings();
-        let mut calldata: Array<felt252> = array![constants::STRK_ADDRESS().into()];
+        let mut calldata: Array<felt252> = array![];
+        calldata.append_serde(VAULT_NAME());
+        calldata.append_serde(VAULT_SYMBOL());
+        calldata.append(constants::STRK_ADDRESS().into());
         calldata.append(accessControl.into());
         allowed_pools.serialize(ref calldata);
         settings.serialize(ref calldata);
@@ -129,6 +136,36 @@ pub mod test_vesu_rebalance {
         let (_, vesu_disp, vesu_erc4626) = deploy_vesu_vault();
         assert(vesu_erc4626.asset() == constants::STRK_ADDRESS(), 'invalid asset');
         assert(vesu_disp.get_previous_index() == get_prev_const(), 'invalid prev val');
+
+        let erc20Disp = IERC20MixinDispatcher { contract_address: vesu_disp.contract_address };
+        assert(erc20Disp.name() == VAULT_NAME(), 'invalid name');
+        assert(erc20Disp.symbol() == VAULT_SYMBOL(), 'invalid symbol');
+        assert(erc20Disp.decimals() == 18, 'invalid decimals');
+    }
+
+    #[test]
+    #[fork("mainnet_latest")]
+    fn test_vesu_constructor_usdc() {
+        let accessControl = test_utils::deploy_access_control();
+        let vesu_rebal = declare("VesuRebalance").unwrap().contract_class();
+        let allowed_pools = get_allowed_pools();
+        let settings = get_settings();
+        let vesu_settings = get_vesu_settings();
+        let mut calldata: Array<felt252> = array![];
+        calldata.append_serde(VAULT_NAME());
+        calldata.append_serde(VAULT_SYMBOL());
+        calldata.append(constants::USDC_ADDRESS().into());
+        calldata.append(accessControl.into());
+        allowed_pools.serialize(ref calldata);
+        settings.serialize(ref calldata);
+        vesu_settings.serialize(ref calldata);
+
+        let (address, _) = vesu_rebal.deploy(@calldata).expect('Vesu vault deploy failed');
+
+        let erc20Disp = IERC20MixinDispatcher { contract_address: address };
+        assert(erc20Disp.name() == VAULT_NAME(), 'invalid name');
+        assert(erc20Disp.symbol() == VAULT_SYMBOL(), 'invalid symbol');
+        assert(erc20Disp.decimals() == 6, 'invalid decimals');
     }
 
     #[test]
