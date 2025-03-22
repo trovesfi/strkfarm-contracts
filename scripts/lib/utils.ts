@@ -65,13 +65,25 @@ export async function myDeclare(contract_name: string, package_name: string = 's
         casm: compiledCasm
     };
     
+    const result = extractContractHashes(payload);
+    console.log("classhash:", result.classHash);
+
+    try {
+        const cls = await provider.getClass(result.classHash);
+        return {
+            class_hash: result.classHash,
+            transaction_hash: null
+        }
+    } catch {
+        console.log('Class not declared, continue');
+    }
+    
     const fee = await acc.estimateDeclareFee({
         contract: compiledSierra,
         casm: compiledCasm, 
     })
     console.log('declare fee', Number(fee.suggestedMaxFee) / 10 ** 18, 'ETH')
-    const result = extractContractHashes(payload);
-    console.log("classhash:", result.classHash);
+    
     
     const tx = await acc.declareIfNot(payload)
     console.log(`Declaring: ${contract_name}, tx:`, tx.transaction_hash);
