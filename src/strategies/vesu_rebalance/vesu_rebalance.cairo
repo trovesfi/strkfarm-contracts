@@ -173,7 +173,7 @@ mod VesuRebalance {
         fn rebalance(ref self: ContractState, actions: Array<Action>) {
             // perform rebalance
             self.common.assert_not_paused();
-            self._collect_fees();
+            self._collect_fees(self.total_supply());
 
             // rebalance
             let (yield_before_rebalance, _) = self.compute_yield();
@@ -233,7 +233,7 @@ mod VesuRebalance {
             self.common.assert_relayer_role();
             self.common.assert_not_paused();
 
-            self._collect_fees();
+            self._collect_fees(self.total_supply());
             self._rebal_loop(actions);
 
             // post rebalance validations
@@ -509,12 +509,16 @@ mod VesuRebalance {
         }
 
         // required fee
-        fn _collect_fees(ref self: ContractState) {
+        // @param previous_total_supply: The supply using which fee share is calculated
+        fn _collect_fees(ref self: ContractState, previous_total_supply: u256) {
             let this = get_contract_address();
             let prev_index = self.previous_index.read();
             let assets = self.total_assets();
 
-            let total_supply = self.erc20.total_supply();
+            // since any newly minted tokens in transaction as minted at same rate
+            // as just before transaction, using total_supply now is ok bcz total_assets is 
+            // also as of now
+            let total_supply = self.total_supply();
             let curr_index = (assets * DEFAULT_INDEX.into()) / total_supply;
             if curr_index < prev_index.into() {
                 let new_index = ((assets - 1) * DEFAULT_INDEX.into()) / total_supply;
@@ -522,8 +526,15 @@ mod VesuRebalance {
                 return;
             }
             let index_diff = curr_index.try_into().unwrap() - prev_index;
+         
             // compute fee in asset()
-            let fee = (index_diff * self.settings.fee_bps.read().into()) / 10000;
+            let numerator: u256 = previous_total_supply * index_diff.into() * self.settings.fee_bps.read().into();
+            let denominator: u256 = 10000 * DEFAULT_INDEX.into();
+            let fee = if (numerator <= 1) {
+                0
+            } else {
+                (numerator - 1) / denominator
+            };
             if fee == 0 { // no point of transfer logic if fee = 0
                 return;
             }
@@ -555,7 +566,7 @@ mod VesuRebalance {
             let new_index = ((assets - fee.into() - 1) * DEFAULT_INDEX.into()) / total_supply;
             self.previous_index.write(new_index.try_into().unwrap());
 
-            self.emit(CollectFees { fee_collected: fee, fee_collector: fee_receiver });
+            self.emit(CollectFees { fee_collected: fee.try_into().unwrap(), fee_collector: fee_receiver });
         }
 
         fn _rebal_loop(ref self: ContractState, action_array: Array<Action>) {
@@ -808,7 +819,7 @@ mod VesuRebalance {
             let v_token = *pool_ids_array.at(default_pool_index.into()).v_token;
             ERC20Helper::approve(self.asset(), v_token, assets);
             IERC4626Dispatcher { contract_address: v_token }.deposit(assets, this);
-            contract_state._collect_fees();
+            contract_state._collect_fees(contract_state.total_supply() - shares);
         }
 
         /// @notice Handles pre-withdrawal operations to ensure liquidity availability.
@@ -822,7 +833,7 @@ mod VesuRebalance {
         ) {
             let mut contract_state = self.get_contract_mut();
             contract_state.common.assert_not_paused();
-            contract_state._collect_fees();
+            contract_state._collect_fees(contract_state.total_supply());
             let mut pool_ids_array = contract_state._get_pool_data();
 
             // loop through all pools and withdraw max possible from each pool
@@ -873,7 +884,7 @@ mod VesuRebalance {
     /// hooks defining before and after actions for the harvest function
     impl HarvestHooksImpl of HarvestHooksTrait<ContractState> {
         fn before_update(ref self: ContractState) -> HarvestBeforeHookResult {
-            self._collect_fees();
+            self._collect_fees(self.total_supply());
             HarvestBeforeHookResult { baseToken: self.asset() }
         }
 

@@ -34,6 +34,7 @@ name = "mainnet_latest"
 url = "$MAINNET_RPC_URL"
 block_id.tag = "latest"
 
+
 [[tool.snforge.fork]]
 name = "mainnet_846087"
 url = "$MAINNET_RPC_URL"
@@ -88,6 +89,11 @@ block_id.number = "1134787"
 name = "mainnet_1165999"
 url = "$MAINNET_RPC_URL"
 block_id.number = "1165999"
+
+[[tool.snforge.fork]]
+name = "mainnet_1256209"
+url = "$MAINNET_RPC_URL"
+block_id.number = "1256209"
 
 [profile.dev.cairo]
 unstable-add-statements-code-locations-debug-info = true
