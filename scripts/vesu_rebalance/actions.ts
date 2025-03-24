@@ -4,7 +4,7 @@ import { Account, Contract, TransactionExecutionStatus, uint256 } from 'starknet
 
 async function main() {
     const contracts = VesuRebalanceStrategies;
-    const strategy = contracts[0];
+    const strategy = contracts[2];
     const config = getMainnetConfig();
     const pricer = new Pricer(config, await Global.getTokens());
     pricer.start();
@@ -18,7 +18,10 @@ async function main() {
     const acc = new Account(getRpcProvider(), process.env.ADDRESS!, process.env.PK!, "1", '0x3');
     
     const depositCalls = await vesuRebalance.depositCall(
-        new Web3Number("1", 18), ContractAddr.from(acc.address)
+        {
+            tokenInfo: vesuRebalance.asset(),
+            amount: new Web3Number(0.01, 6)
+        }, ContractAddr.from(acc.address)
     );
     console.log(depositCalls)
     const gas = await acc.estimateInvokeFee(depositCalls);
