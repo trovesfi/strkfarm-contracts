@@ -2,11 +2,11 @@
 pub mod test_vesu_rebalance {
     use snforge_std::{
         declare, ContractClassTrait, start_cheat_caller_address, stop_cheat_caller_address,
-        start_cheat_block_number_global
+        start_cheat_block_number_global, start_cheat_block_timestamp_global, stop_cheat_block_number_global,
     };
     use starknet::contract_address::contract_address_const;
     use snforge_std::{DeclareResultTrait};
-    use starknet::{ContractAddress, get_contract_address};
+    use starknet::{ContractAddress, get_contract_address, get_block_timestamp};
     use strkfarm_contracts::helpers::constants;
     use strkfarm_contracts::components::ekuboSwap::{ekuboSwapImpl};
     use strkfarm_contracts::tests::utils as test_utils;
@@ -95,15 +95,36 @@ pub mod test_vesu_rebalance {
     fn VAULT_SYMBOL() -> ByteArray { "VS" }
 
     fn deploy_vesu_vault() -> (ContractAddress, IVesuRebalDispatcher, IERC4626Dispatcher) {
+        let allowed_pools = get_allowed_pools();
+        return _deploy_vesu_vault(constants::STRK_ADDRESS(), allowed_pools);
+    }
+
+    fn USDC_VTOKEN_GENESIS() -> ContractAddress {
+        return contract_address_const::<0x1610abab2ff987cdfb5e73cccbf7069cbb1a02bbfa5ee31d97cc30e29d89090>();
+    }
+
+    fn deploy_usdc_vesu_vault() -> (ContractAddress, IVesuRebalDispatcher, IERC4626Dispatcher) {
+        let mut allowed_pools = get_allowed_pools();
+        let mut pool1 = allowed_pools[0];
+        let pool1 = PoolProps {
+            pool_id: *pool1.pool_id,
+            max_weight: 5000,
+            v_token: USDC_VTOKEN_GENESIS()
+        };
+        let allowed_pools: Array<PoolProps> = array![pool1];
+        return _deploy_vesu_vault(constants::USDC_ADDRESS(), allowed_pools);
+    }
+
+    fn _deploy_vesu_vault(asset: ContractAddress, allowed_pools: Array<PoolProps>) -> (ContractAddress, IVesuRebalDispatcher, IERC4626Dispatcher) {
         let accessControl = test_utils::deploy_access_control();
         let vesu_rebal = declare("VesuRebalance").unwrap().contract_class();
-        let allowed_pools = get_allowed_pools();
         let settings = get_settings();
-        let vesu_settings = get_vesu_settings();
+        let mut vesu_settings = get_vesu_settings();
+        vesu_settings.col = asset;
         let mut calldata: Array<felt252> = array![];
         calldata.append_serde(VAULT_NAME());
         calldata.append_serde(VAULT_SYMBOL());
-        calldata.append(constants::STRK_ADDRESS().into());
+        calldata.append(asset.into());
         calldata.append(accessControl.into());
         allowed_pools.serialize(ref calldata);
         settings.serialize(ref calldata);
@@ -586,6 +607,68 @@ pub mod test_vesu_rebalance {
         // Check User 2 balance after withdrawal
         let user2_balance = ERC20Helper::balanceOf(constants::STRK_ADDRESS(), user2);
         assert(user2_balance > amount, 'deposit should include rewards');
+    }
+
+    #[test]
+    #[fork("mainnet_1256209")]
+    fn test_usdc_deposit() {
+        // non-18 decimals test
+        let amount = 1000 * pow::ten_pow(6);
+        let this = get_contract_address();
+        let time = get_block_timestamp();
+        let block = 1255994;
+        start_cheat_block_timestamp_global(time);
+        start_cheat_block_number_global(block);
+        
+        // load USDC
+        let source = contract_address_const::<0x00000005dd3d2f4429af886cd1a3b08289dbcea99a294197e9eb43b0e0325b4b>();
+        start_cheat_caller_address(constants::USDC_ADDRESS(), source);
+        ERC20Helper::transfer(constants::USDC_ADDRESS(), this, amount * 2);
+        stop_cheat_caller_address(constants::USDC_ADDRESS());
+
+        let (vesu_address, vesu_vault, vesu_erc4626) = deploy_usdc_vesu_vault();
+
+        ERC20Helper::approve(constants::USDC_ADDRESS(), vesu_address, amount);
+        let bal = ERC20Helper::balanceOf(constants::USDC_ADDRESS(), this);
+
+        // first deposit
+        let prev_index_before = vesu_vault.get_previous_index();
+        assert(prev_index_before == 1000000000000000000, 'invalid prev val');
+        let _ = vesu_erc4626.deposit(amount, this);
+        let default_id = vesu_vault.get_settings().default_pool_index;
+        let allowed_pools = vesu_vault.get_allowed_pools();
+        let v_token = *allowed_pools.at(default_id.into()).v_token;
+        let v_token_bal = ERC20Helper::balanceOf(v_token, vesu_address);
+        let pool_assets = IERC4626Dispatcher { contract_address: v_token }
+            .convert_to_assets(v_token_bal);
+        assert(pool_assets == 999999999, 'invalid asset deposited');
+        let prev_index_after = vesu_vault.get_previous_index();
+        assert(prev_index_after == 999999998000000000, 'index not updated');
+
+        start_cheat_block_number_global(block + 100000);
+        start_cheat_block_timestamp_global(time + 100000);
+        let total_assets = vesu_erc4626.total_assets();
+
+        // second deposit
+        let amount = 500 * pow::ten_pow(6);
+        let fee_receiver = get_settings().fee_receiver;
+        let bal_before = ERC20Helper::balanceOf(USDC_VTOKEN_GENESIS(), fee_receiver);
+        assert(bal_before == 0, 'invalid fee [1]');
+        ERC20Helper::approve(constants::USDC_ADDRESS(), vesu_address, amount);
+        let prev_index_before = vesu_vault.get_previous_index();
+        let _ = vesu_erc4626.deposit(amount, this);
+        let allowed_pools = vesu_vault.get_allowed_pools();
+        let v_token = *allowed_pools.at(default_id.into()).v_token;
+        let v_token_bal = ERC20Helper::balanceOf(v_token, vesu_address);
+        let pool_assets = IERC4626Dispatcher { contract_address: v_token }
+            .convert_to_assets(v_token_bal);
+        assert(pool_assets == 1500003445, 'invalid asset deposited');
+        let fee_after = ERC20Helper::balanceOf(USDC_VTOKEN_GENESIS(), fee_receiver);
+        assert(fee_after == 377943322642573, 'invalid fee [2]');
+        let prev_index_after = vesu_vault.get_previous_index();
+        assert(
+            prev_index_after == 1000003572004557877, 'index not updated[2]'
+        );
     }
 
     #[test]
