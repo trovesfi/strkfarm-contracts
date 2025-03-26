@@ -1,4 +1,4 @@
-use starknet::{ClassHash};
+use starknet::{ClassHash, ContractAddress};
 
 #[starknet::interface]
 pub trait ICommon<TState> {
@@ -6,4 +6,5 @@ pub trait ICommon<TState> {
     fn pause(ref self: TState);
     fn unpause(ref self: TState);
     fn is_paused(self: @TState) -> bool;
+    fn access_control(self: @TState) -> ContractAddress;
 }

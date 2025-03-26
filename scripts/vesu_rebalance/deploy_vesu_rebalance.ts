@@ -101,7 +101,7 @@ function getPoolWeights(allPools: any) {
     })
 }
 
-async function getSTRKConfig() {
+export async function getSTRKConfig() {
     const allPools = await VesuRebalance.getAllPossibleVerifiedPools(ContractAddr.from(STRK));
     const pools = getPoolWeights(allPools);
     

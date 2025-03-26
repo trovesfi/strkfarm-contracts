@@ -43,5 +43,17 @@ export const RE7_USDC_POOL = '0x7f135b4df21183991e9ff88380c2686dd8634fd4b09bb2b5
 export const RE7_USDC_V_TOKEN = '0xb5581d0bc94bc984cf79017d0f4b079c7e926af3d79bd92ff66fb451b340df'
 
 
-export const RELAYER = '0x02D6cf6182259ee62A001EfC67e62C1fbc0dF109D2AA4163EB70D6d1074F0173';
 export const ACCESS_CONTROL = '0x636a3f51cc37f5729e4da4b1de6a8549a28f3c0d5bf3b17f150971e451ff9c2'
+export const TIMELOCK = '0x0613a26e199F9BaFa9418567F4ef0d78E9496a8D6AAb15fBA718a2eC7F2f2F69'
+export const TIMELOCK_DELAY = 0;
+// todo switch to multisig
+export const SUPER_ADMIN = '0x055d39827894c40F04fe3a314Ad013Bf9Bc5220F7eB6CD8863212DCba6C0e16E'
+export const RELAYER = '0x02D6cf6182259ee62A001EfC67e62C1fbc0dF109D2AA4163EB70D6d1074F0173';
+export const EMERGENCY_ACTORS = [RELAYER];
+// key: strkfarmdmin2 => HotWallet but good enough for governor role
+// can switch to multisig later
+export const GOVERNOR = ["0x055d39827894c40F04fe3a314Ad013Bf9Bc5220F7eB6CD8863212DCba6C0e16E"];
+
+export const accountKeyMap = {};
+accountKeyMap[SUPER_ADMIN] = 'strkfarmadmin2';
+accountKeyMap[RELAYER] = 'risk-manager';
