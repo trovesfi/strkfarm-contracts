@@ -40,7 +40,7 @@ export function getAccount(accountKey: string) {
         PASSWORD: process.env.ACCOUNT_SECURE_PASSWORD || '',
     });
     
-    return store.getAccount(accountKey);
+    return store.getAccount(accountKey, '0x3');
 }
 
 // export function getAccount(accountKey: string) {

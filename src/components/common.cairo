@@ -52,6 +52,10 @@ pub mod CommonComp {
             let pausable = get_dep_component!(self, Pausable);
             pausable.is_paused()
         }
+
+        fn access_control(self: @ComponentState<TContractState>) -> ContractAddress {
+            self.access_control.read()
+        }
     }
 
     #[generate_trait]

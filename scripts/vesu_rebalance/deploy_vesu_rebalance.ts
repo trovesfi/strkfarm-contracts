@@ -1,6 +1,8 @@
-import { Contract, num } from "starknet";
-import { ACCESS_CONTROL, ORACLE_OURS, STRK } from "../lib/constants";
+import { byteArray, Contract, num, TransactionExecutionStatus } from "starknet";
+import { ACCESS_CONTROL, accountKeyMap, ETH, ORACLE_OURS, STRK, SUPER_ADMIN, USDC } from "../lib/constants";
 import { deployContract, getAccount, getRpcProvider, myDeclare } from "../lib/utils";
+import { ContractAddr, VesuRebalance, VesuRebalanceStrategies } from "@strkfarm/sdk";
+import { executeBatch, scheduleBatch } from "../timelock/actions";
 
 type PoolConfig = {
     pool_id: string; 
@@ -23,6 +25,8 @@ type ProtocolConfig = {
 };
 
 async function deployVesuRebalance(
+    name: string,
+    symbol: string,
     asset: string,
     pools: PoolConfig[],
     feeConfig: FeeConfig,
@@ -32,6 +36,8 @@ async function deployVesuRebalance(
     const controller = ACCESS_CONTROL;
     
     await deployContract("VesuRebalance", class_hash, {
+        name: byteArray.byteArrayFromString(name),
+        symbol: byteArray.byteArrayFromString(symbol),
         asset,
         access_control: controller,
         allowed_pools: pools,
@@ -77,44 +83,89 @@ async function getVTokens(pools: PoolConfig[], asset: string) {
     return _pools;
 }
 
-async function getSTRKConfig() {
-    const _pools = [{
-        pool_id: POOL_IDs.GENESIS,
-        max_weight: 10000, // 100%
-        v_token: "0x"
-    }, {
-        pool_id: POOL_IDs.Re7_xSTRK,
-        max_weight: 5000, // 50%
-        v_token: "0x"
-    }, {
-        pool_id: POOL_IDs.Re7_Eco,
-        max_weight: 3000, // 30%
-        v_token: "0x"
-    }, {
-        pool_id: POOL_IDs.Alterscope_CASH,
-        max_weight: 1000, // 10%
-        v_token: "0x"
-    }, {
-        pool_id: POOL_IDs.Re7_USDC,
-        max_weight: 3000, // 5%
-        v_token: "0x"
-    }, {
-        pool_id: POOL_IDs.Alterscope_xSTRK,
-        max_weight: 3000, // 30%
-        v_token: "0x"
-    }];
+const trustedPools = ['Genesis', 'Re7'];
+const midWeightPools = ['Re7 xSTRK'];
 
-    const pools = await getVTokens(_pools, STRK);
+function getPoolWeights(allPools: any) {
+    return allPools.filter(pool => !pool.name.includes('sSTRK'))
+    .map((pool) => {
+        const doesTrustPoolNameIncluded = trustedPools.some((trustedPool) => pool.name.includes(trustedPool));
+        const doesMidWeightPoolNameIncluded = midWeightPools.some((midWeightPool) => pool.name.includes(midWeightPool));
+        const weight = doesMidWeightPoolNameIncluded ? 10000 : doesTrustPoolNameIncluded ? 10000 : 2000;
+        const item = {
+            pool_id: pool.pool_id.address,
+            max_weight: weight,
+            v_token: pool.v_token.address
+        }
+        console.log("item", {...item, name: pool.name});
+        return item;
+    })
+}
+
+export async function getSTRKConfig() {
+    const allPools = await VesuRebalance.getAllPossibleVerifiedPools(ContractAddr.from(STRK));
+    const pools = getPoolWeights(allPools);
+    
+    console.log(pools);
+    // const pools = await getVTokens(_pools, STRK);
 
     return {
         asset: STRK,
-        pools
+        pools,
+        name: 'STRK',
     }
 }
+
+async function getETHConfig() {
+    const allPools = await VesuRebalance.getAllPossibleVerifiedPools(ContractAddr.from(ETH));
+    const pools = getPoolWeights(allPools);
+
+    return {
+        asset: ETH,
+        pools,
+        name: 'ETH',
+    }
+}
+
+async function getUSDCConfig() {
+    const allPools = await VesuRebalance.getAllPossibleVerifiedPools(ContractAddr.from(USDC));
+    const pools = getPoolWeights(allPools);
+
+    return {
+        asset: USDC,
+        pools,
+        name: 'USDC',
+    }
+}
+
+async function upgrade() {
+    const { class_hash } = await myDeclare("VesuRebalance");
+    const addr = VesuRebalanceStrategies.find((strategy) => strategy.name.includes('USDC'))?.address.address;
+    if (!addr) {
+        throw new Error('No strategy found');
+    }
+    const cls = await getRpcProvider().getClassAt(addr);
+    const contract = new Contract(cls.abi, addr, getRpcProvider());
+    const acc = getAccount(accountKeyMap[SUPER_ADMIN]);
+
+    const call = await contract.populate("upgrade", [class_hash]);
+    const scheduleCall = await scheduleBatch([call], "0", "0x0", true);
+    const executeCall = await executeBatch([call], "0", "0x0", true);
+    const tx = await acc.execute([...scheduleCall, ...executeCall]);
+    console.log(`Upgrade scheduled. tx: ${tx.transaction_hash}`);
+    await getRpcProvider().waitForTransaction(tx.transaction_hash, {
+        successStates: [TransactionExecutionStatus.SUCCEEDED]
+    });
+    console.log(`Upgrade done`);
+
+}
+
 if (require.main === module) {
 
     async function run() {
-        const { asset, pools } = await getSTRKConfig();
+        // const { asset, pools, name } = await getSTRKConfig();
+        // const { asset, pools, name } = await getETHConfig();
+        const { asset, pools, name } = await getUSDCConfig();
         const feeConfig = {
             default_pool_index: 0,
             fee_bps: 1000, // 10%
@@ -129,8 +180,11 @@ if (require.main === module) {
             oracle: ORACLE_OURS
         };
 
-        await deployVesuRebalance(asset, pools, feeConfig, protocolConfig);
+        const _name = `Vesu Fusion ${name}`;
+        const symbol = `vf${name}`;
+        await deployVesuRebalance(_name, symbol, asset, pools, feeConfig, protocolConfig);
     }
 
-    run()
+    // run()
+    upgrade()
 }
