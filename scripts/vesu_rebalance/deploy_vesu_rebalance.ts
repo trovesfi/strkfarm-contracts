@@ -1,7 +1,8 @@
-import { byteArray, Contract, num } from "starknet";
-import { ACCESS_CONTROL, ETH, ORACLE_OURS, STRK, USDC } from "../lib/constants";
+import { byteArray, Contract, num, TransactionExecutionStatus } from "starknet";
+import { ACCESS_CONTROL, accountKeyMap, ETH, ORACLE_OURS, STRK, SUPER_ADMIN, USDC } from "../lib/constants";
 import { deployContract, getAccount, getRpcProvider, myDeclare } from "../lib/utils";
 import { ContractAddr, VesuRebalance, VesuRebalanceStrategies } from "@strkfarm/sdk";
+import { executeBatch, scheduleBatch } from "../timelock/actions";
 
 type PoolConfig = {
     pool_id: string; 
@@ -137,6 +138,28 @@ async function getUSDCConfig() {
     }
 }
 
+async function upgrade() {
+    const { class_hash } = await myDeclare("VesuRebalance");
+    const addr = VesuRebalanceStrategies.find((strategy) => strategy.name.includes('USDC'))?.address.address;
+    if (!addr) {
+        throw new Error('No strategy found');
+    }
+    const cls = await getRpcProvider().getClassAt(addr);
+    const contract = new Contract(cls.abi, addr, getRpcProvider());
+    const acc = getAccount(accountKeyMap[SUPER_ADMIN]);
+
+    const call = await contract.populate("upgrade", [class_hash]);
+    const scheduleCall = await scheduleBatch([call], "0", "0x0", true);
+    const executeCall = await executeBatch([call], "0", "0x0", true);
+    const tx = await acc.execute([...scheduleCall, ...executeCall]);
+    console.log(`Upgrade scheduled. tx: ${tx.transaction_hash}`);
+    await getRpcProvider().waitForTransaction(tx.transaction_hash, {
+        successStates: [TransactionExecutionStatus.SUCCEEDED]
+    });
+    console.log(`Upgrade done`);
+
+}
+
 if (require.main === module) {
 
     async function run() {
@@ -162,5 +185,6 @@ if (require.main === module) {
         await deployVesuRebalance(_name, symbol, asset, pools, feeConfig, protocolConfig);
     }
 
-    run()
+    // run()
+    upgrade()
 }
