@@ -2,7 +2,8 @@
 pub mod test_vesu_rebalance {
     use snforge_std::{
         declare, ContractClassTrait, start_cheat_caller_address, stop_cheat_caller_address,
-        start_cheat_block_number_global, start_cheat_block_timestamp_global, stop_cheat_block_number_global,
+        start_cheat_block_number_global, start_cheat_block_timestamp_global,
+        stop_cheat_block_number_global,
     };
     use starknet::contract_address::contract_address_const;
     use snforge_std::{DeclareResultTrait};
@@ -91,8 +92,12 @@ pub mod test_vesu_rebalance {
         }
     }
 
-    fn VAULT_NAME() -> ByteArray { "VesuRebalance" }
-    fn VAULT_SYMBOL() -> ByteArray { "VS" }
+    fn VAULT_NAME() -> ByteArray {
+        "VesuRebalance"
+    }
+    fn VAULT_SYMBOL() -> ByteArray {
+        "VS"
+    }
 
     fn deploy_vesu_vault() -> (ContractAddress, IVesuRebalDispatcher, IERC4626Dispatcher) {
         let allowed_pools = get_allowed_pools();
@@ -100,22 +105,24 @@ pub mod test_vesu_rebalance {
     }
 
     fn USDC_VTOKEN_GENESIS() -> ContractAddress {
-        return contract_address_const::<0x1610abab2ff987cdfb5e73cccbf7069cbb1a02bbfa5ee31d97cc30e29d89090>();
+        return contract_address_const::<
+            0x1610abab2ff987cdfb5e73cccbf7069cbb1a02bbfa5ee31d97cc30e29d89090
+        >();
     }
 
     fn deploy_usdc_vesu_vault() -> (ContractAddress, IVesuRebalDispatcher, IERC4626Dispatcher) {
         let mut allowed_pools = get_allowed_pools();
         let mut pool1 = allowed_pools[0];
         let pool1 = PoolProps {
-            pool_id: *pool1.pool_id,
-            max_weight: 5000,
-            v_token: USDC_VTOKEN_GENESIS()
+            pool_id: *pool1.pool_id, max_weight: 5000, v_token: USDC_VTOKEN_GENESIS()
         };
         let allowed_pools: Array<PoolProps> = array![pool1];
         return _deploy_vesu_vault(constants::USDC_ADDRESS(), allowed_pools);
     }
 
-    fn _deploy_vesu_vault(asset: ContractAddress, allowed_pools: Array<PoolProps>) -> (ContractAddress, IVesuRebalDispatcher, IERC4626Dispatcher) {
+    fn _deploy_vesu_vault(
+        asset: ContractAddress, allowed_pools: Array<PoolProps>
+    ) -> (ContractAddress, IVesuRebalDispatcher, IERC4626Dispatcher) {
         let accessControl = test_utils::deploy_access_control();
         let vesu_rebal = declare("VesuRebalance").unwrap().contract_class();
         let settings = get_settings();
@@ -619,9 +626,11 @@ pub mod test_vesu_rebalance {
         let block = 1255994;
         start_cheat_block_timestamp_global(time);
         start_cheat_block_number_global(block);
-        
+
         // load USDC
-        let source = contract_address_const::<0x00000005dd3d2f4429af886cd1a3b08289dbcea99a294197e9eb43b0e0325b4b>();
+        let source = contract_address_const::<
+            0x00000005dd3d2f4429af886cd1a3b08289dbcea99a294197e9eb43b0e0325b4b
+        >();
         start_cheat_caller_address(constants::USDC_ADDRESS(), source);
         ERC20Helper::transfer(constants::USDC_ADDRESS(), this, amount * 2);
         stop_cheat_caller_address(constants::USDC_ADDRESS());
@@ -666,9 +675,7 @@ pub mod test_vesu_rebalance {
         let fee_after = ERC20Helper::balanceOf(USDC_VTOKEN_GENESIS(), fee_receiver);
         assert(fee_after == 377943322642573, 'invalid fee [2]');
         let prev_index_after = vesu_vault.get_previous_index();
-        assert(
-            prev_index_after == 1000003572004557877, 'index not updated[2]'
-        );
+        assert(prev_index_after == 1000003572004557877, 'index not updated[2]');
     }
 
     #[test]

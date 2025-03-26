@@ -516,7 +516,7 @@ mod VesuRebalance {
             let assets = self.total_assets();
 
             // since any newly minted tokens in transaction as minted at same rate
-            // as just before transaction, using total_supply now is ok bcz total_assets is 
+            // as just before transaction, using total_supply now is ok bcz total_assets is
             // also as of now
             let total_supply = self.total_supply();
             let curr_index = (assets * DEFAULT_INDEX.into()) / total_supply;
@@ -526,9 +526,11 @@ mod VesuRebalance {
                 return;
             }
             let index_diff = curr_index.try_into().unwrap() - prev_index;
-         
+
             // compute fee in asset()
-            let numerator: u256 = previous_total_supply * index_diff.into() * self.settings.fee_bps.read().into();
+            let numerator: u256 = previous_total_supply
+                * index_diff.into()
+                * self.settings.fee_bps.read().into();
             let denominator: u256 = 10000 * DEFAULT_INDEX.into();
             let fee = if (numerator <= 1) {
                 0
@@ -566,7 +568,12 @@ mod VesuRebalance {
             let new_index = ((assets - fee.into() - 1) * DEFAULT_INDEX.into()) / total_supply;
             self.previous_index.write(new_index.try_into().unwrap());
 
-            self.emit(CollectFees { fee_collected: fee.try_into().unwrap(), fee_collector: fee_receiver });
+            self
+                .emit(
+                    CollectFees {
+                        fee_collected: fee.try_into().unwrap(), fee_collector: fee_receiver
+                    }
+                );
         }
 
         fn _rebal_loop(ref self: ContractState, action_array: Array<Action>) {
@@ -796,7 +803,8 @@ mod VesuRebalance {
     impl ERC4626DefaultLimits<ContractState> of ERC4626Component::LimitConfigTrait<ContractState> {}
 
     impl DefaultConfig of ERC4626Component::ImmutableConfig {
-        const UNDERLYING_DECIMALS: u8 = 0; // Technically not used, as fn decimals() is self.assets().decimals()
+        const UNDERLYING_DECIMALS: u8 =
+            0; // Technically not used, as fn decimals() is self.assets().decimals()
         const DECIMALS_OFFSET: u8 = 0;
     }
 

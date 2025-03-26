@@ -260,7 +260,7 @@ mod ConcLiquidityVault {
 
             // burn shares
             self.erc20.burn(caller, shares);
-            
+
             // transfer proceeds to receiver
             ERC20Helper::transfer(pool_key.token0, receiver, amt0.into());
             ERC20Helper::transfer(pool_key.token1, receiver, amt1.into());

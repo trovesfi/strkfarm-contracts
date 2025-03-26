@@ -1024,7 +1024,7 @@ pub mod test_cl_vault {
         assert(bal0_vault < 1000000000000, 'invalid wst amount');
         assert(bal1_vault < 1000000000000, 'invalid eth amount');
     }
-    
+
     #[test]
     #[should_panic(expected: ('Access: Missing relayer role',))]
     #[fork("mainnet_1165999")]
@@ -1044,7 +1044,7 @@ pub mod test_cl_vault {
         let swap_params1 = STRKWSTAvnuSwapInfo(amt0, clVault.contract_address);
         let swap_params2 = STRKETHAvnuSwapInfo(amt1, clVault.contract_address);
         let proofs: Array<felt252> = array![1];
-   
+
         start_cheat_caller_address(clVault.contract_address, constants::EKUBO_USER_ADDRESS());
         clVault
             .harvest(
