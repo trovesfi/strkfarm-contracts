@@ -1,119 +1,23 @@
 # STRKFarm Contracts
 
-## Ekubo Concentrated Liquidity Vault
+## Overview
 
-Automated concentrated liquidity management protocol for Ekubo AMM, combining dynamic position management with fee auto-compounding and STRK reward harvesting.
+STRKFarm is a decentralized yield aggregator built on Starknet, designed to maximize returns for users by automatically reallocating assets across various DeFi protocols. Leveraging Starknet's scalability and low transaction costs, STRKFarm offers efficient yield farming opportunities through automated vaults and strategies. Users can deposit their assets into STRKFarm's vaults, which then optimize and manage the yield farming process to earn passive income. The platform emphasizes transparency, security, and user-friendly interfaces to enhance the DeFi experience.
 
-### How It Works
-The vault lets users deposit token pairs into optimized liquidity positions on Ekubo. Using ERC-4626 share mechanics, it automatically reinvests earned fees back into the position and handles complex operations like reward harvesting. Governance-controlled rebalancing maintains optimal price bounds while role-based security restricts critical operations. The system tracks positions via NFT ownership and enforces strict precision checks for capital efficiency.
+## Strategies
 
-## Core Operations
+STRKFarm employs various strategies to generate passive income for its users. Two notable strategies include:
 
-### `deposit(amount0, amount1)` 💰
-- Converts token amounts to liquidity shares
-- Auto-collects existing fees before deposit
-- Verifies liquidity matches expected value
-- Mints ERC-20 shares proportional to contribution
+### Ekubo Concentrated Liquidity Vault
 
-### `withdraw(shares)` 🏧
-- Burns shares and redeems proportional liquidity
-- Withdraws tokens from Ekubo position
-- Transfers assets directly to receiver
-- Updates NFT state if position empties
+An automated concentrated liquidity management protocol for the Ekubo AMM, this vault combines dynamic position management with fee auto-compounding and STRK reward harvesting. It allows users to deposit token pairs into optimized liquidity positions on Ekubo, automatically reinvesting earned fees and handling complex operations like reward harvesting. Governance-controlled rebalancing maintains optimal price bounds, while role-based security restricts critical operations. The system tracks positions via NFT ownership and enforces strict precision checks for capital efficiency.
 
-### `rebalance(new_bounds, swap_params)` 🔄
-1. Withdraws all liquidity from current position
-2. Updates price bounds via governance-approved ticks
-3. Swaps residual tokens using Avnu router
-4. Deposits optimized liquidity with new bounds
-5. Enforces ≤0.01% balance tolerance
+For more detailed information, please refer to the [Ekubo Concentrated Liquidity Vault README](https://github.com/strkfarm/strkfarm-contracts/blob/ariyan/strat_readme/src/strategies/cl_vault/README.md).
 
-## Security Architecture 🛡️
+### Vesu Rebalance Strategy
 
-### Access Control
-| Role         | Privileges                          | Methods                   |
-|--------------|-------------------------------------|--------------------------|
-| **Governor** | Update fee parameters<br>Emergency stop | `set_settings()`<br>`set_incentives_off()` |
-| **Relayer**  | Execute rebalances                  | `rebalance()`            |
+This strategy automates yield optimization across multiple Vesu liquidity pools. Utilizing ERC-4626 vault mechanics, it dynamically rebalances positions between different pools while auto-compounding fees and harvesting STRK rewards. Governance-set parameters control pool weights and fee structures, with strict precision checks ensuring capital efficiency within a 0.01% tolerance.
 
-### Protections
-- **Reentrancy Guards**: All user-facing functions
-- **Input Validation**:
-  ```cairo
-  assert(amount0 > 0 || amount1 > 0, 'No zero deposits')
-  assert(shares ≤ balance_of(caller), 'Over-withdraw')
+For more detailed information, please refer to the [Vesu Rebalance Strategy README](https://github.com/strkfarm/strkfarm-contracts/blob/ariyan/strat_readme/src/strategies/vesu_rebalance/README.md).
 
-
-## Vesu Rebalance Strategy
-
-### How It Works 🔄
-The Vesu Rebalance Strategy automates yield optimization across multiple Vesu liquidity pools. Using ERC-4626 vault mechanics, it dynamically rebalances positions between different pools while auto-compounding fees and harvesting STRK rewards. Governance-set parameters control pool weights and fee structures, with strict precision checks ensuring capital efficiency within 0.01% tolerance.
-
-## Core Operations ⚙️
-
-### `deposit(assets)` 💰
-- Converts ERC-20 assets to vault shares (ERC-4626 standard)
-- Auto-collects protocol fees before new deposits
-- Deposits to governance-set default Vesu pool
-- Mints shares 1:1 with contributed liquidity
-- Enforces maximum pool weight constraints
-
-### `withdraw(shares)` 🏧
-- Burns shares proportionally across all pools
-- Withdraws from highest-liquidity pools first
-- Transfers base asset directly to receiver
-- Executes emergency withdrawal if pools are frozen
-- Verifies 100% balance utilization (0.01% tolerance)
-
-### `rebalance(actions)` 🔄
-1. Collects outstanding protocol fees (0.3% basis)
-2. Executes batch actions across Vesu pools:
-   - `DEPOSIT`: Allocate to target pools
-   - `WITHDRAW`: Deallocate from underperforming pools
-3. Validates post-rebalance yield improvement
-4. Enforces governance-set max weight per pool
-5. Requires Relayer role authorization
-
-### `harvest(claim, swapInfo)` 🌾
-1. Claims STRK rewards from Vesu distributor
-2. Swaps 100% to base asset via Avnu routes
-3. Redeposits harvested assets into default pool
-4. Distributes rewards through share mechanism
-5. Charges protocol fee on harvested amount
-
-### `rebalance_weights(actions)` ⚖️
-- Reallocates assets between approved pools
-- Maintains total assets while adjusting weights
-- Requires Relayer authorization
-- Collects protocol fees pre-execution
-- Enforces governance-set pool caps
-
-## Emergency Operations 🚨
-
-### `emergency_withdraw()` 🆘
-1. Withdraws all liquidity from all pools
-2. Bypasses normal weight constraints
-3. Requires Emergency Actor role
-4. Executes even with frozen pools
-5. Preserves asset balances
-
-### `emergency_withdraw_pool(pool_index)` ⚠️
-- Force-withdraws from specific pool
-- Ignores utilization checks
-- Requires Emergency Actor role
-- Handles frozen pool edge cases
-- Preserves remaining allocations
-
-## Security Architecture 🛡️
-
-### Access Control
-| Role              | Privileges                          | Critical Functions                  |
-|-------------------|-------------------------------------|--------------------------------------|
-| **Governor**      | Update protocol settings<br>Modify allowed pools<br>Toggle incentive systems | `set_settings()`<br>`set_allowed_pools()`<br>`set_incentives_off()` |
-| **Relayer**       | Execute position rebalancing<br>Adjust pool weight allocations | `rebalance()`<br>`rebalance_weights()` |
-| **Emergency Actor** | Emergency liquidity extraction<br>Frozen pool recovery | `emergency_withdraw()`<br>`emergency_withdraw_pool()` |
-
-**Privilege Details**  
-- Governor: Full protocol configuration control  
-- Relayer: Operational execution with yield validation  
-- Emergency Actor: Bypass normal constraints for capital preservation  
+By implementing these strategies, STRKFarm aims to provide users with the best possible yield farming opportunities, fostering growth and innovation within the DeFi ecosystem.
