@@ -435,10 +435,16 @@ mod ConcLiquidityVault {
                 'invalid STRK balance'
             );
 
-            let token0_amt = swapInfo1
-                .swap(IPriceOracleDispatcher { contract_address: self.oracle.read() });
-            let token1_amt = swapInfo2
-                .swap(IPriceOracleDispatcher { contract_address: self.oracle.read() });
+            let mut token0_amt: u256 = swapInfo1.token_from_amount;
+            if (swapInfo1.token_from_amount > 0 && swapInfo1.token_from_address != swapInfo1.token_to_address) {
+                token0_amt = swapInfo1
+                    .swap(IPriceOracleDispatcher { contract_address: self.oracle.read() });
+            }
+            let mut token1_amt: u256 = swapInfo2.token_from_amount;
+            if (swapInfo2.token_from_amount > 0 && swapInfo2.token_from_address != swapInfo2.token_to_address) {
+                token1_amt = swapInfo2
+                    .swap(IPriceOracleDispatcher { contract_address: self.oracle.read() });
+            }
 
             let bal0_pre = ERC20Helper::balanceOf(token0, get_contract_address());
             let bal1_pre = ERC20Helper::balanceOf(token1, get_contract_address());
