@@ -32,7 +32,7 @@ jobs:
       
       - name: Export environment variables
         run: |
-        echo "MAINNET_RPC_URL=${{ secrets.MAINNET_RPC_URL }}" >> $GITHUB_ENV
+          echo "MAINNET_RPC_URL=${{ secrets.MAINNET_RPC_URL }}" >> $GITHUB_ENV
           export MAINNET_RPC_URL=${{ secrets.MAINNET_RPC_URL }}
 
       - run: scarb fmt --check
