@@ -954,7 +954,7 @@ pub mod test_cl_vault {
         let pre_bal_strk = ERC20Helper::balanceOf(
             constants::STRK_ADDRESS(), clVault.contract_address
         );
-        let fee_collector = contract_address_const::<0x123>();
+        let fee_collector = clVault.get_settings().fee_settings.fee_collector;
         let fee_pre = ERC20Helper::balanceOf(constants::STRK_ADDRESS(), fee_collector);
         let claim = Claim {
             id: 0, amount: pow::ten_pow(18).try_into().unwrap(), claimee: clVault.contract_address,
