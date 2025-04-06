@@ -46,7 +46,7 @@ jobs:
       - name: Run CL Vault tests
         uses: nick-fields/retry@v3
         with:
-          timeout_seconds: 15
+          timeout_minutes: 15
           max_attempts: 3
           retry_on: error
           command: snforge test --max-n-steps 30000000 --rerun-failed test_cl_vault
