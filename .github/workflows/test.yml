@@ -37,7 +37,7 @@ jobs:
 
       - run: scarb fmt --check
 
-      - uses: foundry-rs/setup-snfoundry@v4
+      - uses: foundry-rs/setup-snfoundry@v3
         with: 
           starknet-foundry-version: 0.32.0
       
