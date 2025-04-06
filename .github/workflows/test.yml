@@ -37,7 +37,9 @@ jobs:
 
       - run: scarb fmt --check
 
-      - uses: foundry-rs/setup-snfoundry@v3
+      - uses: foundry-rs/setup-snfoundry@v4
+        with: 
+          starknet-foundry-version: 0.32.0
       
       # Run tests by module to reduce load on RPC
 
