@@ -43,8 +43,8 @@ async function main() {
             amount: new Web3Number(1, 18)
         }
     }
-    const depositAmounts = await mod.getDepositAmounts(myDepositAmounts);
-    console.log(`Deposit amounts: token0: ${depositAmounts.token0.amount}, token1: ${depositAmounts.token1.amount}`);
+    // const depositAmounts = await mod.getDepositAmounts(myDepositAmounts);
+    // console.log(`Deposit amounts: token0: ${depositAmounts.token0.amount}, token1: ${depositAmounts.token1.amount}`);
     
     const acc = getAccount('strkfarmadmin');
     const caller = ContractAddr.from(acc.address);

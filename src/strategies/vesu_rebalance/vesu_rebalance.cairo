@@ -32,7 +32,7 @@ mod VesuRebalance {
         SNFStyleClaimSettings, ClaimImpl as DefaultClaimImpl
     };
     use strkfarm_contracts::components::harvester::harvester_lib::{
-        HarvestConfig, HarvestConfigImpl, HarvestHooksTrait
+        HarvestConfig, HarvestConfigImpl, HarvestHooksTrait, HarvestEvent
     };
     use strkfarm_contracts::interfaces::oracle::{IPriceOracleDispatcher};
     use core::num::traits::Zero;
@@ -119,7 +119,8 @@ mod VesuRebalance {
         #[flat]
         CommonCompEvent: CommonComp::Event,
         Rebalance: Rebalance,
-        CollectFees: CollectFees
+        CollectFees: CollectFees,
+        Harvest: HarvestEvent,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -326,6 +327,12 @@ mod VesuRebalance {
                 rewardsContract: contract_address_const::<0>()
             };
 
+            let from_token = swapInfo.token_from_address;
+            let to_token = swapInfo.token_to_address;
+            let from_amount = swapInfo.token_from_amount;
+            let pre_bal = ERC20Helper::balanceOf(
+                to_token, get_contract_address()
+            );
             config
                 .simple_harvest(
                     ref self,
@@ -336,6 +343,26 @@ mod VesuRebalance {
                     swapInfo,
                     IPriceOracleDispatcher { contract_address: self.vesu_settings.read().oracle }
                 );
+            let post_bal = ERC20Helper::balanceOf(
+                to_token, get_contract_address()
+            );
+            
+            // if tokens are same, then we need to calculate the amount from diff
+            let from_amount = if (from_token == to_token) {
+                post_bal - pre_bal
+            } else {
+                // if not equal, the harvester assets the claim amount to be equal to the
+                // from amount, so we can use that
+                from_amount
+            };
+            self.emit(
+                HarvestEvent {
+                    rewardToken: from_token,
+                    rewardAmount: from_amount,
+                    baseToken: to_token,
+                    baseAmount: post_bal - pre_bal,
+                }
+            );
         }
     }
 

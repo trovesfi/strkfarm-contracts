@@ -1,6 +1,6 @@
 #[starknet::contract]
 mod ConcLiquidityVault {
-    use core::option::OptionTrait;
+use core::option::OptionTrait;
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess,};
     use openzeppelin::security::pausable::{PausableComponent};
     use openzeppelin::security::reentrancyguard::{ReentrancyGuardComponent};
@@ -93,6 +93,16 @@ mod ConcLiquidityVault {
         shares: u256
     }
 
+    #[derive(Drop, Copy, starknet::Event)]
+    pub struct HarvestEvent {
+        pub rewardToken: ContractAddress,
+        pub rewardAmount: u256,
+        pub token0: ContractAddress,
+        pub token0Amount: u256,
+        pub token1: ContractAddress,
+        pub token1Amount: u256
+    }
+
     #[storage]
     struct Storage {
         #[substorage(v0)]
@@ -147,6 +157,7 @@ mod ConcLiquidityVault {
         Rebalance: Rebalance,
         HandleFees: HandleFees,
         FeeSettings: FeeSettings,
+        Harvest: HarvestEvent
     }
 
     #[derive(Drop, starknet::Event)]
@@ -478,6 +489,17 @@ mod ConcLiquidityVault {
                     shares.try_into().unwrap(),
                     all_shares.try_into().unwrap()
                 );
+            
+            self.emit(
+                HarvestEvent {
+                    rewardToken: constants::STRK_ADDRESS(),
+                    rewardAmount: strk_amt,
+                    token0: token0,
+                    token0Amount: token0_amt,
+                    token1: token1,
+                    token1Amount: token1_amt
+                }
+            );
         }
 
         /// @notice Retrieves the position key associated with the contract.
