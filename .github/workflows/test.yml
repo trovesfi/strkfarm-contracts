@@ -26,18 +26,26 @@ jobs:
 
       - name: Set environment variables
         env:
-          RPC_URL: ${{ secrets.RPC_URL }}
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
         run: |
-          echo "RPC_URL is set"
+          echo "MAINNET_RPC_URL is set"
       
       - name: Export environment variables
         run: |
-          echo "RPC_URL=${{ secrets.RPC_URL }}" >> $GITHUB_ENV
-          export RPC_URL=${{ secrets.RPC_URL }}
+          echo "MAINNET_RPC_URL=${{ secrets.MAINNET_RPC_URL }}" >> $GITHUB_ENV
+          export MAINNET_RPC_URL=${{ secrets.MAINNET_RPC_URL }}
 
       - run: scarb fmt --check
 
-      - run: scarb build --test
-
       - uses: foundry-rs/setup-snfoundry@v3
-      - run: scarb test
+        with: 
+          starknet-foundry-version: 0.32.0
+      
+      - name: Run tests
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 15
+          max_attempts: 3
+          retry_on: error
+          retry_wait_seconds: 60
+          command: snforge test --max-n-steps 30000000 --rerun-failed
