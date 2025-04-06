@@ -41,19 +41,11 @@ jobs:
         with: 
           starknet-foundry-version: 0.32.0
       
-      # Run tests by module to reduce load on RPC
-
-      - name: Run CL Vault tests
+      - name: Run tests
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 15
           max_attempts: 3
           retry_on: error
           retry_wait_seconds: 60
-          command: snforge test --max-n-steps 30000000 --rerun-failed test_cl_vault
-
-      # - name: Run CL Vault tests
-      #   run: snforge test --max-n-steps 30000000 --rerun-failed test_cl_vault
-
-      - name: Run Vesu rebalance tests
-        run: snforge test --max-n-steps 30000000 --rerun-failed test_vesu_rebalance
+          command: snforge test --max-n-steps 30000000 --rerun-failed
