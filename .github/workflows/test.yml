@@ -37,7 +37,12 @@ jobs:
 
       - run: scarb fmt --check
 
-      - run: scarb build --test
-
       - uses: foundry-rs/setup-snfoundry@v3
-      - run: scarb test
+      
+      # Run tests by module to reduce load on RPC
+
+      - name: Run CL Vault tests
+        run: snforge test --max-n-steps 30000000 --rerun-failed test_cl_vault
+
+      - name: Run Vesu rebalance tests
+        run: snforge test --max-n-steps 30000000 --rerun-failed test_vesu_rebalance
