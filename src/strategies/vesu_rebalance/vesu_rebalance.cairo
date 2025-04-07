@@ -321,7 +321,7 @@ mod VesuRebalance {
         ) {
             self.common.assert_not_paused();
             self.common.assert_relayer_role();
-            self._collect_fees(self.total_supply());
+            self.s(self.total_supply());
 
             let vesuSettings = SNFStyleClaimSettings { rewardsContract: rewardsContract, };
             let config = HarvestConfig {};
@@ -357,14 +357,15 @@ mod VesuRebalance {
                 // from amount, so we can use that
                 from_amount
             };
-            self.emit(
-                HarvestEvent {
-                    rewardToken: from_token,
-                    rewardAmount: from_amount,
-                    baseToken: to_token,
-                    baseAmount: post_bal - pre_bal,
-                }
-            );
+            self
+                .emit(
+                    HarvestEvent {
+                        rewardToken: from_token,
+                        rewardAmount: from_amount,
+                        baseToken: to_token,
+                        baseAmount: post_bal - pre_bal,
+                    }
+                );
         }
     }
 
