@@ -93,6 +93,19 @@ mod ConcLiquidityVault {
         shares: u256
     }
 
+    #[derive(Drop, Copy, starknet::Event)]
+    pub struct HarvestEvent {
+        #[key]
+        pub rewardToken: ContractAddress,
+        pub rewardAmount: u256,
+        #[key]
+        pub token0: ContractAddress,
+        pub token0Amount: u256,
+        #[key]
+        pub token1: ContractAddress,
+        pub token1Amount: u256
+    }
+
     #[storage]
     struct Storage {
         #[substorage(v0)]
@@ -147,6 +160,7 @@ mod ConcLiquidityVault {
         Rebalance: Rebalance,
         HandleFees: HandleFees,
         FeeSettings: FeeSettings,
+        Harvest: HarvestEvent
     }
 
     #[derive(Drop, starknet::Event)]
@@ -477,6 +491,18 @@ mod ConcLiquidityVault {
                     new_liquidity.try_into().unwrap(),
                     shares.try_into().unwrap(),
                     all_shares.try_into().unwrap()
+                );
+
+            self
+                .emit(
+                    HarvestEvent {
+                        rewardToken: constants::STRK_ADDRESS(),
+                        rewardAmount: strk_amt,
+                        token0: token0,
+                        token0Amount: token0_amt,
+                        token1: token1,
+                        token1Amount: token1_amt
+                    }
                 );
         }
 

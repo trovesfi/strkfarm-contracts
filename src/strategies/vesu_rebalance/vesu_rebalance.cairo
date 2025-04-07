@@ -32,7 +32,7 @@ mod VesuRebalance {
         SNFStyleClaimSettings, ClaimImpl as DefaultClaimImpl
     };
     use strkfarm_contracts::components::harvester::harvester_lib::{
-        HarvestConfig, HarvestConfigImpl, HarvestHooksTrait
+        HarvestConfig, HarvestConfigImpl, HarvestHooksTrait, HarvestEvent
     };
     use strkfarm_contracts::interfaces::oracle::{IPriceOracleDispatcher};
     use core::num::traits::Zero;
@@ -72,6 +72,8 @@ mod VesuRebalance {
         pub const MAX_WEIGHT_EXCEEDED: felt252 = 'Max weight exceeded';
         pub const INVALID_POOL_LENGTH: felt252 = 'Invalid pool length';
         pub const INVALID_POOL_CONFIG: felt252 = 'Invalid pool config';
+        pub const INVALID_ASSET: felt252 = 'Invalid asset';
+        pub const INVALID_HARVEST: felt252 = 'Invalid harvest';
     }
 
     #[storage]
@@ -119,7 +121,8 @@ mod VesuRebalance {
         #[flat]
         CommonCompEvent: CommonComp::Event,
         Rebalance: Rebalance,
-        CollectFees: CollectFees
+        CollectFees: CollectFees,
+        Harvest: HarvestEvent,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -318,6 +321,7 @@ mod VesuRebalance {
         ) {
             self.common.assert_not_paused();
             self.common.assert_relayer_role();
+            self._collect_fees(self.total_supply());
 
             let vesuSettings = SNFStyleClaimSettings { rewardsContract: rewardsContract, };
             let config = HarvestConfig {};
@@ -326,6 +330,12 @@ mod VesuRebalance {
                 rewardsContract: contract_address_const::<0>()
             };
 
+            let from_token = swapInfo.token_from_address;
+            let to_token = swapInfo.token_to_address;
+            let from_amount = swapInfo.token_from_amount;
+            assert(to_token == self.asset(), Errors::INVALID_ASSET);
+
+            let pre_bal = self.total_assets();
             config
                 .simple_harvest(
                     ref self,
@@ -335,6 +345,26 @@ mod VesuRebalance {
                     snfSettings,
                     swapInfo,
                     IPriceOracleDispatcher { contract_address: self.vesu_settings.read().oracle }
+                );
+            let post_bal = self.total_assets();
+            assert(post_bal > pre_bal, Errors::INVALID_HARVEST);
+
+            // if tokens are same, then we need to calculate the amount from diff
+            let from_amount = if (from_token == to_token) {
+                post_bal - pre_bal
+            } else {
+                // if not equal, the harvester asserts the claim amount to be equal to the
+                // from amount, so we can use that
+                from_amount
+            };
+            self
+                .emit(
+                    HarvestEvent {
+                        rewardToken: from_token,
+                        rewardAmount: from_amount,
+                        baseToken: to_token,
+                        baseAmount: post_bal - pre_bal,
+                    }
                 );
         }
     }
@@ -892,7 +922,6 @@ mod VesuRebalance {
     /// hooks defining before and after actions for the harvest function
     impl HarvestHooksImpl of HarvestHooksTrait<ContractState> {
         fn before_update(ref self: ContractState) -> HarvestBeforeHookResult {
-            self._collect_fees(self.total_supply());
             HarvestBeforeHookResult { baseToken: self.asset() }
         }
 
