@@ -1,6 +1,6 @@
 import { VesuRebalanceStrategies, VesuRebalance, getMainnetConfig, Global, Pricer, Web3Number, ContractAddr } from '@strkfarm/sdk';
 import { ACCOUNT_NAME, getAccount, getRpcProvider } from '../lib/utils';
-import { Account, Contract, TransactionExecutionStatus, uint256 } from 'starknet';
+import { Account, Call, Contract, TransactionExecutionStatus, uint256 } from 'starknet';
 
 async function main() {
     const contracts = VesuRebalanceStrategies;
@@ -63,6 +63,33 @@ async function main() {
     // }
 }
 
+async function harvest() {
+    const contracts = VesuRebalanceStrategies;
+    const riskAcc = getAccount('risk-manager', 'accounts-risk.json', process.env.ACCOUNT_SECURE_PASSWORD_RISK);
+    const config = getMainnetConfig();
+    const pricer = new Pricer(config, await Global.getTokens());
+    pricer.start();
+    await pricer.waitTillReady();
+    console.log('Pricer ready');
+
+    const calls: Call[] = [];
+    for (let i = 0; i < contracts.length; i++) {
+        const strategy = contracts[i];
+        const vesuRebalance = new VesuRebalance(config, pricer, strategy);
+        const call = await vesuRebalance.harvest(riskAcc);
+        calls.push(...call);
+    }
+    const _calls = [...calls.slice(0, 3)]; // ! TODO Ensure I switch to all calls later
+    const gas = await riskAcc.estimateInvokeFee(_calls);
+    const tx = await riskAcc.execute(_calls);
+    console.log(`Harvest tx: ${tx.transaction_hash}`);
+    await getRpcProvider().waitForTransaction(tx.transaction_hash, {
+        successStates: [TransactionExecutionStatus.SUCCEEDED]
+    });
+    console.log('Harvest done');
+}
+
 if (require.main === module) {
-    main();
+    // main();
+    harvest();
 }

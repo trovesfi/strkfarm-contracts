@@ -72,6 +72,8 @@ mod VesuRebalance {
         pub const MAX_WEIGHT_EXCEEDED: felt252 = 'Max weight exceeded';
         pub const INVALID_POOL_LENGTH: felt252 = 'Invalid pool length';
         pub const INVALID_POOL_CONFIG: felt252 = 'Invalid pool config';
+        pub const INVALID_ASSET: felt252 = 'Invalid asset';
+        pub const INVALID_HARVEST: felt252 = 'Invalid harvest';
     }
 
     #[storage]
@@ -319,6 +321,7 @@ mod VesuRebalance {
         ) {
             self.common.assert_not_paused();
             self.common.assert_relayer_role();
+            self._collect_fees(self.total_supply());
 
             let vesuSettings = SNFStyleClaimSettings { rewardsContract: rewardsContract, };
             let config = HarvestConfig {};
@@ -330,9 +333,9 @@ mod VesuRebalance {
             let from_token = swapInfo.token_from_address;
             let to_token = swapInfo.token_to_address;
             let from_amount = swapInfo.token_from_amount;
-            let pre_bal = ERC20Helper::balanceOf(
-                to_token, get_contract_address()
-            );
+            assert(to_token == self.asset(), Errors::INVALID_ASSET);
+
+            let pre_bal = self.total_assets();
             config
                 .simple_harvest(
                     ref self,
@@ -343,15 +346,14 @@ mod VesuRebalance {
                     swapInfo,
                     IPriceOracleDispatcher { contract_address: self.vesu_settings.read().oracle }
                 );
-            let post_bal = ERC20Helper::balanceOf(
-                to_token, get_contract_address()
-            );
-            
+            let post_bal = self.total_assets();
+            assert(post_bal > pre_bal, Errors::INVALID_HARVEST);
+
             // if tokens are same, then we need to calculate the amount from diff
             let from_amount = if (from_token == to_token) {
                 post_bal - pre_bal
             } else {
-                // if not equal, the harvester assets the claim amount to be equal to the
+                // if not equal, the harvester asserts the claim amount to be equal to the
                 // from amount, so we can use that
                 from_amount
             };
@@ -919,7 +921,6 @@ mod VesuRebalance {
     /// hooks defining before and after actions for the harvest function
     impl HarvestHooksImpl of HarvestHooksTrait<ContractState> {
         fn before_update(ref self: ContractState) -> HarvestBeforeHookResult {
-            self._collect_fees(self.total_supply());
             HarvestBeforeHookResult { baseToken: self.asset() }
         }
 

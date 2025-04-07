@@ -95,10 +95,13 @@ use core::option::OptionTrait;
 
     #[derive(Drop, Copy, starknet::Event)]
     pub struct HarvestEvent {
+        #[key]
         pub rewardToken: ContractAddress,
         pub rewardAmount: u256,
+        #[key]
         pub token0: ContractAddress,
         pub token0Amount: u256,
+        #[key]
         pub token1: ContractAddress,
         pub token1Amount: u256
     }

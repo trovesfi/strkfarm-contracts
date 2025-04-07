@@ -573,7 +573,8 @@ pub mod test_vesu_rebalance {
         let claim = Claim {
             id: 0, amount: pow::ten_pow(18).try_into().unwrap(), claimee: vesu_address
         };
-        let swap_params = STRKETHAvnuSwapInfo(claim.amount.into(), vesu_address);
+        let mut swap_params = STRKETHAvnuSwapInfo(claim.amount.into(), vesu_address);
+        swap_params.token_to_address = constants::STRK_ADDRESS();
         let proofs: Array<felt252> = array![1];
         vesu_vault.harvest(snf_defi_spring.contract_address, claim, proofs.span(), swap_params);
         /// println!("harvest done");

@@ -15,8 +15,10 @@ pub struct HarvestBeforeHookResult {
 
 #[derive(Drop, Copy, starknet::Event)]
 pub struct HarvestEvent {
+    #[key]
     pub rewardToken: ContractAddress,
     pub rewardAmount: u256,
+    #[key]
     pub baseToken: ContractAddress,
     pub baseAmount: u256,
 }
