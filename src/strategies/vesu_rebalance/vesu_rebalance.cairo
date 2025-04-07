@@ -321,7 +321,7 @@ mod VesuRebalance {
         ) {
             self.common.assert_not_paused();
             self.common.assert_relayer_role();
-            self.s(self.total_supply());
+            self._collect_fees(self.total_supply());
 
             let vesuSettings = SNFStyleClaimSettings { rewardsContract: rewardsContract, };
             let config = HarvestConfig {};
