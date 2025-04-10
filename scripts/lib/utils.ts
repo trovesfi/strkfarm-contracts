@@ -27,17 +27,17 @@ function saveContracts(contracts: any) {
     writeFileSync(PATH, JSON.stringify(contracts));
 }
 
-export function getAccount(accountKey: string) {
+export function getAccount(accountKey: string, fileName = 'accounts-orig.json', password = process.env.ACCOUNT_SECURE_PASSWORD) {
     const config: IConfig = {
         provider: <any>new RpcProvider({nodeUrl: process.env.RPC_URL}),
         network: Network.mainnet,
         stage: 'production'
     }
     const storeConfig = getDefaultStoreConfig(Network.mainnet);
-    storeConfig.ACCOUNTS_FILE_NAME = 'accounts-orig.json';
+    storeConfig.ACCOUNTS_FILE_NAME = fileName;
     const store = new Store(config, {
         ...storeConfig,
-        PASSWORD: process.env.ACCOUNT_SECURE_PASSWORD || '',
+        PASSWORD: password || '',
     });
     
     return store.getAccount(accountKey, '0x3');

@@ -93,6 +93,19 @@ mod ConcLiquidityVault {
         shares: u256
     }
 
+    #[derive(Drop, Copy, starknet::Event)]
+    pub struct HarvestEvent {
+        #[key]
+        pub rewardToken: ContractAddress,
+        pub rewardAmount: u256,
+        #[key]
+        pub token0: ContractAddress,
+        pub token0Amount: u256,
+        #[key]
+        pub token1: ContractAddress,
+        pub token1Amount: u256
+    }
+
     #[storage]
     struct Storage {
         #[substorage(v0)]
@@ -147,6 +160,7 @@ mod ConcLiquidityVault {
         Rebalance: Rebalance,
         HandleFees: HandleFees,
         FeeSettings: FeeSettings,
+        Harvest: HarvestEvent
     }
 
     #[derive(Drop, starknet::Event)]
@@ -435,10 +449,18 @@ mod ConcLiquidityVault {
                 'invalid STRK balance'
             );
 
-            let token0_amt = swapInfo1
-                .swap(IPriceOracleDispatcher { contract_address: self.oracle.read() });
-            let token1_amt = swapInfo2
-                .swap(IPriceOracleDispatcher { contract_address: self.oracle.read() });
+            let mut token0_amt: u256 = swapInfo1.token_from_amount;
+            if (swapInfo1.token_from_amount > 0
+                && swapInfo1.token_from_address != swapInfo1.token_to_address) {
+                token0_amt = swapInfo1
+                    .swap(IPriceOracleDispatcher { contract_address: self.oracle.read() });
+            }
+            let mut token1_amt: u256 = swapInfo2.token_from_amount;
+            if (swapInfo2.token_from_amount > 0
+                && swapInfo2.token_from_address != swapInfo2.token_to_address) {
+                token1_amt = swapInfo2
+                    .swap(IPriceOracleDispatcher { contract_address: self.oracle.read() });
+            }
 
             let bal0_pre = ERC20Helper::balanceOf(token0, get_contract_address());
             let bal1_pre = ERC20Helper::balanceOf(token1, get_contract_address());
@@ -469,6 +491,18 @@ mod ConcLiquidityVault {
                     new_liquidity.try_into().unwrap(),
                     shares.try_into().unwrap(),
                     all_shares.try_into().unwrap()
+                );
+
+            self
+                .emit(
+                    HarvestEvent {
+                        rewardToken: constants::STRK_ADDRESS(),
+                        rewardAmount: strk_amt,
+                        token0: token0,
+                        token0Amount: token0_amt,
+                        token1: token1,
+                        token1Amount: token1_amt
+                    }
                 );
         }
 

@@ -1,6 +1,8 @@
 import { ACCOUNT_NAME, deployContract, getAccount, getRpcProvider, getSwapInfo, myDeclare } from "../lib/utils";
-import { EKUBO_POSITIONS, EKUBO_CORE, EKUBO_POSITIONS_NFT, ORACLE_OURS, wstETH, ETH, ACCESS_CONTROL, xSTRK, STRK} from "../lib/constants";
+import { EKUBO_POSITIONS, EKUBO_CORE, EKUBO_POSITIONS_NFT, ORACLE_OURS, wstETH, ETH, ACCESS_CONTROL, xSTRK, STRK, accountKeyMap, SUPER_ADMIN} from "../lib/constants";
 import { byteArray, Contract, TransactionExecutionStatus, uint256 } from "starknet";
+import { EkuboCLVaultStrategies } from "@strkfarm/sdk";
+import { executeBatch, scheduleBatch } from "../timelock/actions";
 
 // Added parameters for pool configuration
 function createPoolKey(
@@ -123,28 +125,54 @@ async function rebalance() {
     console.log('Rebalance done');
 }
 
+async function upgrade() {
+    const { class_hash } = await myDeclare("ConcLiquidityVault");
+    // ! Ensure correct strategy
+    const addr = EkuboCLVaultStrategies.find((strategy) => strategy.name.includes('xSTRK'))?.address.address;
+    if (!addr) {
+        throw new Error('No strategy found');
+    }
+    const cls = await getRpcProvider().getClassAt(addr);
+    const contract = new Contract(cls.abi, addr, getRpcProvider());
+    const acc = getAccount(accountKeyMap[SUPER_ADMIN]);
+
+    const call = await contract.populate("upgrade", [class_hash]);
+    const scheduleCall = await scheduleBatch([call], "0", "0x0", true);
+    const executeCall = await executeBatch([call], "0", "0x0", true);
+    const tx = await acc.execute([...scheduleCall, ...executeCall]);
+    console.log(`Upgrade scheduled. tx: ${tx.transaction_hash}`);
+    await getRpcProvider().waitForTransaction(tx.transaction_hash, {
+        successStates: [TransactionExecutionStatus.SUCCEEDED]
+    });
+    console.log(`Upgrade done`);
+}
+
+// 0x104d7db720522a6
+// 0x104d7db720522a6
 if (require.main === module) {
     // deploy cl vault
-    const poolKey = createPoolKey(
-        xSTRK,
-        STRK,
-        '34028236692093847977029636859101184',
-        200,
-        0
-    );
+    // const poolKey = createPoolKey(
+    //     xSTRK,
+    //     STRK,
+    //     '34028236692093847977029636859101184',
+    //     200,
+    //     0
+    // );
 
-    const bounds = createBounds(
-        priceToTick(1.033, true, 200),
-        priceToTick(1.03603, false, 200)
-    );
+    // const bounds = createBounds(
+    //     priceToTick(1.033, true, 200),
+    //     priceToTick(1.03603, false, 200)
+    // );
 
-    declareAndDeployConcLiquidityVault(
-        poolKey,
-        bounds,
-        1000, // 10% fee
-        "0x06419f7DeA356b74bC1443bd1600AB3831b7808D1EF897789FacFAd11a172Da7", // fee collector
-        "STRKFarm Ekubo xSTRK/STRK",
-        "frmEkXSTRKSTRK",
-     );
+    // declareAndDeployConcLiquidityVault(
+    //     poolKey,
+    //     bounds,
+    //     1000, // 10% fee
+    //     "0x06419f7DeA356b74bC1443bd1600AB3831b7808D1EF897789FacFAd11a172Da7", // fee collector
+    //     "STRKFarm Ekubo xSTRK/STRK",
+    //     "frmEkXSTRKSTRK",
+    //  );
     // rebalance();
+
+    upgrade()
 }

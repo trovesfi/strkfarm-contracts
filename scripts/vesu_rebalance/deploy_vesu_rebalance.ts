@@ -1,5 +1,5 @@
-import { byteArray, Contract, num, TransactionExecutionStatus } from "starknet";
-import { ACCESS_CONTROL, accountKeyMap, ETH, ORACLE_OURS, STRK, SUPER_ADMIN, USDC } from "../lib/constants";
+import { byteArray, Call, Contract, num, TransactionExecutionStatus } from "starknet";
+import { ACCESS_CONTROL, accountKeyMap, ETH, ORACLE_OURS, STRK, SUPER_ADMIN, USDC, USDT } from "../lib/constants";
 import { deployContract, getAccount, getRpcProvider, myDeclare } from "../lib/utils";
 import { ContractAddr, VesuRebalance, VesuRebalanceStrategies } from "@strkfarm/sdk";
 import { executeBatch, scheduleBatch } from "../timelock/actions";
@@ -138,19 +138,38 @@ async function getUSDCConfig() {
     }
 }
 
+async function getUSDTConfig() {
+    const allPools = await VesuRebalance.getAllPossibleVerifiedPools(ContractAddr.from(USDT));
+    const pools = getPoolWeights(allPools);
+
+    console.log(pools);
+
+    return {
+        asset: USDT,
+        pools,
+        name: 'USDT',
+    }
+}
+
+
 async function upgrade() {
     const { class_hash } = await myDeclare("VesuRebalance");
-    const addr = VesuRebalanceStrategies.find((strategy) => strategy.name.includes('USDC'))?.address.address;
-    if (!addr) {
+    // ! ensure the addr is correct
+    const addresses = VesuRebalanceStrategies.map((s) => s.address.address);
+    if (!addresses.length) {
         throw new Error('No strategy found');
     }
-    const cls = await getRpcProvider().getClassAt(addr);
-    const contract = new Contract(cls.abi, addr, getRpcProvider());
     const acc = getAccount(accountKeyMap[SUPER_ADMIN]);
+    const cls = await getRpcProvider().getClassAt(addresses[0]);
+    const calls: Call[] = [];
+    for (let addr of addresses) {
+        const contract = new Contract(cls.abi, addr, getRpcProvider());
+        const call = contract.populate("upgrade", [class_hash]);
+        calls.push(call);
+    }
 
-    const call = await contract.populate("upgrade", [class_hash]);
-    const scheduleCall = await scheduleBatch([call], "0", "0x0", true);
-    const executeCall = await executeBatch([call], "0", "0x0", true);
+    const scheduleCall = await scheduleBatch(calls, "0", "0x0", true);
+    const executeCall = await executeBatch(calls, "0", "0x0", true);
     const tx = await acc.execute([...scheduleCall, ...executeCall]);
     console.log(`Upgrade scheduled. tx: ${tx.transaction_hash}`);
     await getRpcProvider().waitForTransaction(tx.transaction_hash, {
@@ -165,7 +184,8 @@ if (require.main === module) {
     async function run() {
         // const { asset, pools, name } = await getSTRKConfig();
         // const { asset, pools, name } = await getETHConfig();
-        const { asset, pools, name } = await getUSDCConfig();
+        // const { asset, pools, name } = await getUSDCConfig();
+        const { asset, pools, name } = await getUSDTConfig();
         const feeConfig = {
             default_pool_index: 0,
             fee_bps: 1000, // 10%
