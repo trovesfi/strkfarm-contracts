@@ -12,6 +12,7 @@ alexandria_data_structures = { git = "https://github.com/keep-starknet-strange/a
 openzeppelin = "0.18.0"
 openzeppelin_introspection = "0.18.0"
 ekubo = { git = "https://github.com/EkuboProtocol/abis.git", branch = "main"}
+vesu = { git = "https://github.com/strkfarm/vesu-v1.git", rev = "6b3f63525a5f7051e716da5ead6e82a3c48ec74d"}
 # lst = { path = "../kSTRK/lst" }
 starknet = ">=2.6.0" # cairo version
 

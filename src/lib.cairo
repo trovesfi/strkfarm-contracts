@@ -49,6 +49,12 @@ pub mod strategies {
         #[cfg(test)]
         pub mod test;
     }
+    pub mod vesu_pools {
+        pub mod extension;
+        pub mod interface;
+        #[cfg(test)]
+        pub mod test;
+    }
 }
 
 #[cfg(test)]

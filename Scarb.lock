@@ -201,4 +201,14 @@ dependencies = [
  "openzeppelin",
  "openzeppelin_introspection",
  "snforge_std",
+ "vesu",
+]
+
+[[package]]
+name = "vesu"
+version = "0.1.0"
+source = "git+https://github.com/strkfarm/vesu-v1.git?rev=6b3f63525a5f7051e716da5ead6e82a3c48ec74d#6b3f63525a5f7051e716da5ead6e82a3c48ec74d"
+dependencies = [
+ "alexandria_math",
+ "snforge_std",
 ]
