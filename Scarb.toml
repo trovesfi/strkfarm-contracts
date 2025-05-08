@@ -12,11 +12,10 @@ alexandria_data_structures = { git = "https://github.com/keep-starknet-strange/a
 openzeppelin = "0.18.0"
 openzeppelin_introspection = "0.18.0"
 ekubo = { git = "https://github.com/EkuboProtocol/abis.git", branch = "main"}
-# lst = { path = "../kSTRK/lst" }
 starknet = ">=2.6.0" # cairo version
 
 [dev-dependencies]
-snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.32.0" }
+snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.38.3" }
 assert_macros = "2.8.4"
 
 [[target.starknet-contract]]
