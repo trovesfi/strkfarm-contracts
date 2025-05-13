@@ -1,5 +1,5 @@
 import { ACCOUNT_NAME, deployContract, getAccount, getRpcProvider, getSwapInfo, myDeclare } from "../lib/utils";
-import { EKUBO_POSITIONS, EKUBO_CORE, EKUBO_POSITIONS_NFT, ORACLE_OURS, wstETH, ETH, ACCESS_CONTROL, xSTRK, STRK, accountKeyMap, SUPER_ADMIN} from "../lib/constants";
+import { EKUBO_POSITIONS, EKUBO_CORE, EKUBO_POSITIONS_NFT, ORACLE_OURS, wstETH, ETH, ACCESS_CONTROL, xSTRK, STRK, accountKeyMap, SUPER_ADMIN, USDC, USDT} from "../lib/constants";
 import { byteArray, Contract, TransactionExecutionStatus, uint256 } from "starknet";
 import { EkuboCLVaultStrategies } from "@strkfarm/sdk";
 import { executeBatch, scheduleBatch } from "../timelock/actions";
@@ -72,7 +72,7 @@ async function declareAndDeployConcLiquidityVault(
 ) {
     const accessControl = ACCESS_CONTROL;
     // const { class_hash } = await myDeclare("ConcLiquidityVault");
-    const class_hash = '0x11fe7c8d6577bcae7f731a56fbf8f19637ba13142fcf36ce06bdc636a321e7a'
+    const class_hash = '0x30cdf64bacc2779e2f207b3992de1c2e5036b9e87c22eb60319ae25f1a73077'
     const feeSettings = createFeeSettings(
         feeBps,        
         collector 
@@ -151,28 +151,29 @@ async function upgrade() {
 // 0x104d7db720522a6
 if (require.main === module) {
     // deploy cl vault
-    // const poolKey = createPoolKey(
-    //     xSTRK,
-    //     STRK,
-    //     '34028236692093847977029636859101184',
-    //     200,
-    //     0
-    // );
+    const poolKey = createPoolKey(
+        USDC,
+        USDT,
+        '6805647338418769825990228293189632',
+        20,
+        0
+    );
 
-    // const bounds = createBounds(
-    //     priceToTick(1.033, true, 200),
-    //     priceToTick(1.03603, false, 200)
-    // );
+    const bounds = createBounds(
+        priceToTick(1.00006, false, poolKey.tick_spacing),
+        priceToTick(1.00012, false, poolKey.tick_spacing)
+    );
 
-    // declareAndDeployConcLiquidityVault(
-    //     poolKey,
-    //     bounds,
-    //     1000, // 10% fee
-    //     "0x06419f7DeA356b74bC1443bd1600AB3831b7808D1EF897789FacFAd11a172Da7", // fee collector
-    //     "STRKFarm Ekubo xSTRK/STRK",
-    //     "frmEkXSTRKSTRK",
-    //  );
+    console.log('Pool key: ', poolKey);
+    declareAndDeployConcLiquidityVault(
+        poolKey,
+        bounds,
+        1000, // 10% fee
+        "0x06419f7DeA356b74bC1443bd1600AB3831b7808D1EF897789FacFAd11a172Da7", // fee collector
+        "tEkubo USDC/USDT",
+        "tEkUSDCUSDT",
+     );
     // rebalance();
 
-    upgrade()
+    // upgrade()
 }
