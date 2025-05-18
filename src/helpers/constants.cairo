@@ -31,6 +31,14 @@ pub fn XSTRK_ADDRESS() -> ContractAddress {
     contract_address_const::<0x028d709c875c0ceac3dce7065bec5328186dc89fe254527084d1689910954b0a>()
 }
 
+pub fn EKUBO_STRK_XSTRK_ADDRESS() -> ContractAddress {
+    contract_address_const::<0x01f083b98674bc21effee29ef443a00c7b9a500fd92cf30341a3da12c73f2324>()
+}
+
+pub fn EKUBO_STRK_XSTRK_USER() -> ContractAddress {
+    contract_address_const::<0x053c99890b560cf41fb4c34b5d45abc918f85782d43c3f5d46ed845c67df350d>()
+}
+
 pub fn VESU_POOL_ID() -> felt252 {
     0x04dc4f0ca6ea4961e4c8373265bfd5317678f4fe374d76f3fd7135f57763bf28
 }
@@ -163,6 +171,10 @@ pub fn NOSTRA_ETHUSDC_DEGEN_POOL() -> ContractAddress {
 
 pub fn PRAGMA_ORACLE() -> ContractAddress {
     contract_address_const::<0x2a85bd616f912537c50a49a4076db02c00b29b2cdc8a197ce92ed1837fa875b>()
+}
+
+pub fn PRAGMA_SUMMARY() -> ContractAddress {
+    contract_address_const::<0x49eefafae944d07744d07cc72a5bf14728a6fb463c3eae5bca13552f5d455fd>()
 }
 
 pub fn USDC_PRAGMA_KEY() -> felt252 {

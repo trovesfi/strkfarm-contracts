@@ -11,42 +11,56 @@ use vesu::{
 };
 
 #[derive(PartialEq, Copy, Drop, Serde)]
-struct VTokenParams {
-    v_token_name: felt252,
-    v_token_symbol: felt252
+pub struct UnderlyingTokens {
+    pub asset1: ContractAddress,
+    pub asset2: ContractAddress
 }
 
 #[derive(PartialEq, Copy, Drop, Serde)]
-struct PragmaOracleParams {
-    pragma_key: felt252,
-    timeout: u64, // [seconds]
-    number_of_sources: u32,
-    start_time_offset: u64, // [seconds]
-    time_window: u64, // [seconds]
-    aggregation_mode: AggregationMode
+pub struct VTokenParams {
+    pub v_token_name: felt252,
+    pub v_token_symbol: felt252
 }
 
 #[derive(PartialEq, Copy, Drop, Serde)]
-struct ShutdownParams {
-    recovery_period: u64, // [seconds]
-    subscription_period: u64, // [seconds]
-    ltv_params: Span<LTVParams>,
+pub struct PragmaOracleParams {
+    pub pragma_key: felt252,
+    pub timeout: u64, // [seconds]
+    pub number_of_sources: u32,
+    pub start_time_offset: u64, // [seconds]
+    pub time_window: u64, // [seconds]
+    pub aggregation_mode: AggregationMode
 }
 
 #[derive(PartialEq, Copy, Drop, Serde)]
-struct LiquidationParams {
-    collateral_asset_index: usize,
-    debt_asset_index: usize,
-    liquidation_factor: u64 // [SCALE]
+pub struct ShutdownParams {
+    pub recovery_period: u64, // [seconds]
+    pub subscription_period: u64, // [seconds]
+    pub ltv_params: Span<LTVParams>,
 }
 
 #[derive(PartialEq, Copy, Drop, Serde)]
-struct FeeParams {
-    fee_recipient: ContractAddress
+pub struct LiquidationParams {
+    pub collateral_asset_index: usize,
+    pub debt_asset_index: usize,
+    pub liquidation_factor: u64 // [SCALE]
+}
+
+#[derive(PartialEq, Copy, Drop, Serde)]
+pub struct FeeParams {
+    pub fee_recipient: ContractAddress
 }
 
 #[starknet::interface]
-trait IDefaultExtensionCallback<TContractState> {
+pub trait ICustomAssets<TContractState> {
+    fn is_custom_asset(self: @TContractState, asset: ContractAddress) -> bool;
+    fn underlying_assets(self: @TContractState, asset: ContractAddress) -> (ContractAddress, ContractAddress);
+    fn set_custom_asset(ref self: TContractState, pool_id: felt252, asset: ContractAddress);
+    fn set_underlying_assets(ref self: TContractState, pool_id: felt252, custom_asset: ContractAddress, asset0: ContractAddress, asset1: ContractAddress);
+}
+
+#[starknet::interface]
+pub trait IDefaultExtensionCallback<TContractState> {
     fn singleton(self: @TContractState) -> ContractAddress;
 }
 
@@ -76,7 +90,7 @@ trait ITokenizationCallback<TContractState> {
 }
 
 #[starknet::interface]
-trait IDefaultExtension<TContractState> {
+pub trait IDefaultExtension<TContractState> {
     fn pool_name(self: @TContractState, pool_id: felt252) -> felt252;
     fn pool_owner(self: @TContractState, pool_id: felt252) -> ContractAddress;
     fn pragma_oracle(self: @TContractState) -> ContractAddress;
