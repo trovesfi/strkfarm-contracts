@@ -51,6 +51,7 @@ pub mod strategies {
     }
     pub mod vesu_pools {
         pub mod extension;
+        pub mod v_token;
         pub mod interface;
         #[cfg(test)]
         pub mod test;

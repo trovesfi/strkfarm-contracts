@@ -5,14 +5,28 @@ mod DefaultExtensionPO {
         ContractAddress, get_contract_address, get_caller_address, event::EventEmitter, contract_address_const
     };
     use core::num::traits::Zero;
+    use strkfarm_contracts::strategies::vesu_pools::interface::{UnderlyingTokens, ICustomAssets, AssetType};
+    use strkfarm_contracts::strategies::cl_vault::interface::{IClVaultDispatcher,IClVaultDispatcherTrait};
+    use strkfarm_contracts::interfaces::IERC4626::{
+        IERC4626, IERC4626Dispatcher, IERC4626DispatcherTrait
+    };
+    use strkfarm_contracts::helpers::{ERC20Helper, pow};
     use vesu::{
         map_list::{map_list_component, map_list_component::MapListTrait},
         data_model::{
             Amount, UnsignedAmount, AssetParams, AssetPrice, LTVParams, Context, LTVConfig, ModifyPositionParams,
             AmountDenomination, AmountType, DebtCapParams
         },
+        units::{INFLATION_FEE, SCALE},
         singleton::{ISingletonDispatcher, ISingletonDispatcherTrait},
-        vendor::erc20::{ERC20ABIDispatcher as IERC20Dispatcher, ERC20ABIDispatcherTrait}, units::INFLATION_FEE,
+        vendor::{
+            erc20::{
+                {ERC20ABIDispatcher as IERC20Dispatcher, ERC20ABIDispatcherTrait}
+            },
+            pragma::{
+                DataType, IPragmaABIDispatcher, IPragmaABIDispatcherTrait
+            }
+        },
         extension::{
             default_extension_po::{
                 LiquidationParams, ShutdownParams, PragmaOracleParams, ITimestampManagerCallback, IDefaultExtension,
@@ -51,6 +65,10 @@ mod DefaultExtensionPO {
         owner: LegacyMap::<felt252, ContractAddress>,
         // tracks the name for each pool
         pool_names: LegacyMap::<felt252, felt252>,
+        // storage for custom assets like Ekubo xSTRK/STRK
+        is_custom_asset: LegacyMap::<ContractAddress, AssetType>,
+        // storage for custom assets' descriptive tokens 
+        custom_assets: LegacyMap::<ContractAddress, (ContractAddress, ContractAddress)>,
         // storage for the position hooks component
         #[substorage(v0)]
         position_hooks: position_hooks_component::Storage,
@@ -109,12 +127,39 @@ mod DefaultExtensionPO {
         singleton: ContractAddress,
         oracle_address: ContractAddress,
         summary_address: ContractAddress,
-        v_token_class_hash: felt252
+        v_token_class_hash: felt252,
     ) {
         self.singleton.write(singleton);
         self.pragma_oracle.set_oracle(oracle_address);
         self.pragma_oracle.set_summary_address(summary_address);
         self.tokenization.set_v_token_class_hash(v_token_class_hash);
+    }
+
+    #[abi(embed_v0)]
+    impl CustomAssetsImpl of ICustomAssets<ContractState> {
+        fn is_custom_asset(self: @ContractState, asset: ContractAddress) -> AssetType {
+            self.is_custom_asset.read(asset)
+        }
+
+        fn underlying_assets(self: @ContractState, asset: ContractAddress) -> (ContractAddress, ContractAddress) {
+            self.custom_assets.read(asset)
+        }
+
+        fn set_custom_asset(ref self: ContractState, pool_id: felt252, asset: ContractAddress, asset_type: AssetType) {
+            assert!(get_caller_address() == self.owner.read(pool_id), "caller-not-owner");
+            self.is_custom_asset.write(asset, asset_type);
+        }
+
+        fn set_underlying_assets(
+            ref self: ContractState,
+            pool_id: felt252,
+            custom_asset: ContractAddress,  
+            asset0: ContractAddress,
+            asset1: ContractAddress
+        ) {
+            assert!(get_caller_address() == self.owner.read(pool_id), "caller-not-owner");
+            self.custom_assets.write(custom_asset, (asset0, asset1));
+        }
     }
 
     impl DefaultExtensionCallbackImpl of IDefaultExtensionCallback<ContractState> {
@@ -419,7 +464,6 @@ mod DefaultExtensionPO {
             assert!(asset_params.len() == interest_rate_configs.len(), "interest-rate-params-mismatch");
             assert!(asset_params.len() == pragma_oracle_params.len(), "pragma-oracle-params-mismatch");
             assert!(asset_params.len() == v_token_params.len(), "v-token-params-mismatch");
-
             // create the pool in the singleton
             let singleton = ISingletonDispatcher { contract_address: self.singleton.read() };
             let pool_id = singleton.create_pool(asset_params, ltv_params, get_contract_address());
@@ -429,7 +473,6 @@ mod DefaultExtensionPO {
 
             // set the pool owner
             self.owner.write(pool_id, owner);
-
             let mut asset_params_copy = asset_params;
             let mut i = 0;
             while !asset_params_copy
@@ -459,15 +502,14 @@ mod DefaultExtensionPO {
                     // set the interest rate model configuration
                     let interest_rate_config = *interest_rate_configs.pop_front().unwrap();
                     self.interest_rate_model.set_interest_rate_config(pool_id, asset, interest_rate_config);
-
                     let v_token_config = *v_token_params.at(i);
                     let VTokenParams { v_token_name, v_token_symbol } = v_token_config;
 
                     // deploy the vToken for the the collateral asset
                     self.tokenization.create_v_token(pool_id, asset, v_token_name, v_token_symbol);
-
                     // burn inflation fee
                     let asset = IERC20Dispatcher { contract_address: asset };
+                    let bal = asset.balance_of(get_caller_address());
                     transfer_asset(
                         asset.contract_address,
                         get_caller_address(),
@@ -512,7 +554,6 @@ mod DefaultExtensionPO {
                             LiquidationConfig { liquidation_factor: params.liquidation_factor }
                         );
                 };
-
             // set the debt caps for each pair
             let mut debt_caps = debt_caps;
             while !debt_caps
@@ -522,7 +563,6 @@ mod DefaultExtensionPO {
                     let debt_asset = *asset_params.at(params.debt_asset_index).asset;
                     self.position_hooks.set_debt_cap(pool_id, collateral_asset, debt_asset, params.debt_cap);
                 };
-
             // set the max shutdown LTVs for each pair
             let mut shutdown_ltv_params = shutdown_params.ltv_params;
             while !shutdown_ltv_params
@@ -536,7 +576,6 @@ mod DefaultExtensionPO {
                             pool_id, collateral_asset, debt_asset, LTVConfig { max_ltv: params.max_ltv }
                         );
                 };
-
             // set the shutdown config
             let ShutdownParams { recovery_period, subscription_period, .. } = shutdown_params;
             self.position_hooks.set_shutdown_config(pool_id, ShutdownConfig { recovery_period, subscription_period });
@@ -836,10 +875,77 @@ mod DefaultExtensionPO {
         /// * `asset` - address of the asset
         /// # Returns
         /// * `AssetPrice` - latest price of the asset and its validity
+        // fn price(self: @ContractState, pool_id: felt252, asset: ContractAddress) -> AssetPrice {
+        //     let is_custom = self.is_custom_asset.read(asset);
+        //     if is_custom {
+        //         let ( asset0, asset1 ) = self.custom_assets.read(asset);
+        //         println!("asset 0 {:?}", asset0);
+        //         println!("asset 1 {:?}", asset1);
+        //         let ( asset0_price, _ ) = self.pragma_oracle.price(pool_id, asset0);
+        //         let ( asset1_price, _ ) = self.pragma_oracle.price(pool_id, asset1);\
+
+        //         // calc decimals
+        //         let dispatcher = IPragmaABIDispatcher { contract_address: self.pragma_oracle() }; 
+        //         let asset0_config = self.oracle_config(pool_id, asset0);
+        //         let res_token0 = dispatcher.get_data(DataType::SpotEntry(asset0_config.pragma_key), asset0_config.aggregation_mode);
+        //         let asset1_config = self.oracle_config(pool_id, asset1);
+        //         let res_token1 = dispatcher.get_data(DataType::SpotEntry(asset1_config.pragma_key), asset1_config.aggregation_mode);
+
+        //         let amount = pow::ten_pow(18);
+        //         let assets = IClVaultDispatcher {contract_address: asset}
+        //             .convert_to_assets(amount);
+
+        //         // calc normalized prices
+        //         println!("dec 0 {:?}", res_token0.decimals);
+        //         println!("dec 1 {:?}", res_token1.decimals);
+        //         let normalized_asset0_price = asset0_price * pow::ten_pow(18 - res_token0.decimals.into());
+        //         let normalized_asset1_price = asset1_price * pow::ten_pow(18 - res_token1.decimals.into());
+
+        //         let asset0_value = (assets.amount0 * normalized_asset0_price) / pow::ten_pow(18);
+        //         let asset1_value = (assets.amount1 * normalized_asset1_price) / pow::ten_pow(18);
+        //         let total_value = asset0_value + asset1_value;
+
+        //         AssetPrice { value: total_value, is_valid: true }
+        //         // todo write generalized fn for all tokens with different decimal values
+        //         // todo done
+        //     } else {
+        //         let (value, is_valid) = self.pragma_oracle.price(pool_id, asset);
+        //         AssetPrice { value, is_valid }
+        //     }
+        // }
         fn price(self: @ContractState, pool_id: felt252, asset: ContractAddress) -> AssetPrice {
+            let asset_type = self.is_custom_asset.read(asset);
+            match asset_type {
+                AssetType::BasicERC4626 => {
+                    let disp = IERC4626Dispatcher {contract_address: asset};
+                    let deposit_asset = disp.asset();
+                    let (asset_price, _) = self.pragma_oracle.price(pool_id, deposit_asset);
+                    let assets = disp.convert_to_assets(SCALE);
+                    let value = (asset_price * assets) / SCALE;
+                    return AssetPrice { value, is_valid: true };
+                },
+                AssetType::EkuboVault => {
+                    let (asset0, asset1) = self.custom_assets.read(asset);
+                    let (asset0_price, _) = self.pragma_oracle.price(pool_id, asset0);
+                    let (asset1_price, _) = self.pragma_oracle.price(pool_id, asset1);
+                    let assets = IClVaultDispatcher { contract_address: asset }
+                        .convert_to_assets(SCALE);
+                    let decimals0 = ERC20Helper::decimals(asset0);
+                    let decimals1 = ERC20Helper::decimals(asset1);
+                    // todo...change 18 to token decimals
+                    let value = ((assets.amount0 * asset0_price) / pow::ten_pow(decimals0.into())) + ((assets.amount1 * asset1_price) / pow::ten_pow(decimals1.into()));
+                    return AssetPrice { value, is_valid: true };
+                },
+                AssetType::None => {
+                    // Native Asset
+                    let (value, is_valid) = self.pragma_oracle.price(pool_id, asset);
+                    return AssetPrice { value, is_valid };
+                }
+            }
             let (value, is_valid) = self.pragma_oracle.price(pool_id, asset);
             AssetPrice { value, is_valid }
         }
+
 
         /// Returns the current interest rate for a given asset in a given pool, given it's utilization
         /// # Arguments
