@@ -5,16 +5,19 @@ mod DefaultExtensionPO {
         ContractAddress, get_contract_address, get_caller_address, event::EventEmitter, contract_address_const
     };
     use core::num::traits::Zero;
-    use strkfarm_contracts::strategies::vesu_pools::interface::{UnderlyingTokens, ICustomAssets};
+    use strkfarm_contracts::strategies::vesu_pools::interface::{UnderlyingTokens, ICustomAssets, AssetType};
     use strkfarm_contracts::strategies::cl_vault::interface::{IClVaultDispatcher,IClVaultDispatcherTrait};
-    use strkfarm_contracts::helpers::pow;
+    use strkfarm_contracts::interfaces::IERC4626::{
+        IERC4626, IERC4626Dispatcher, IERC4626DispatcherTrait
+    };
+    use strkfarm_contracts::helpers::{ERC20Helper, pow};
     use vesu::{
         map_list::{map_list_component, map_list_component::MapListTrait},
         data_model::{
             Amount, UnsignedAmount, AssetParams, AssetPrice, LTVParams, Context, LTVConfig, ModifyPositionParams,
             AmountDenomination, AmountType, DebtCapParams
         },
-        units::INFLATION_FEE,
+        units::{INFLATION_FEE, SCALE},
         singleton::{ISingletonDispatcher, ISingletonDispatcherTrait},
         vendor::{
             erc20::{
@@ -63,7 +66,7 @@ mod DefaultExtensionPO {
         // tracks the name for each pool
         pool_names: LegacyMap::<felt252, felt252>,
         // storage for custom assets like Ekubo xSTRK/STRK
-        is_custom_asset: LegacyMap::<ContractAddress, bool>,
+        is_custom_asset: LegacyMap::<ContractAddress, AssetType>,
         // storage for custom assets' descriptive tokens 
         custom_assets: LegacyMap::<ContractAddress, (ContractAddress, ContractAddress)>,
         // storage for the position hooks component
@@ -134,7 +137,7 @@ mod DefaultExtensionPO {
 
     #[abi(embed_v0)]
     impl CustomAssetsImpl of ICustomAssets<ContractState> {
-        fn is_custom_asset(self: @ContractState, asset: ContractAddress) -> bool {
+        fn is_custom_asset(self: @ContractState, asset: ContractAddress) -> AssetType {
             self.is_custom_asset.read(asset)
         }
 
@@ -142,9 +145,9 @@ mod DefaultExtensionPO {
             self.custom_assets.read(asset)
         }
 
-        fn set_custom_asset(ref self: ContractState, pool_id: felt252, asset: ContractAddress) {
+        fn set_custom_asset(ref self: ContractState, pool_id: felt252, asset: ContractAddress, asset_type: AssetType) {
             assert!(get_caller_address() == self.owner.read(pool_id), "caller-not-owner");
-            self.is_custom_asset.write(asset, true);
+            self.is_custom_asset.write(asset, asset_type);
         }
 
         fn set_underlying_assets(
@@ -910,23 +913,37 @@ mod DefaultExtensionPO {
         //         AssetPrice { value, is_valid }
         //     }
         // }
-
         fn price(self: @ContractState, pool_id: felt252, asset: ContractAddress) -> AssetPrice {
-            let is_custom = self.is_custom_asset.read(asset);
-            if is_custom {
-                let (asset0, asset1) = self.custom_assets.read(asset);
-                let (asset0_price, _) = self.pragma_oracle.price(pool_id, asset0);
-                let (asset1_price, _) = self.pragma_oracle.price(pool_id, asset1);
-                let amount = pow::ten_pow(18);
-                let assets = IClVaultDispatcher { contract_address: asset }
-                    .convert_to_assets(amount);
-                let value = ((assets.amount0 * asset0_price) / pow::ten_pow(18)) + ((assets.amount1 * asset1_price) / pow::ten_pow(18));
-                AssetPrice { value, is_valid: true }
-                // todo write generalized fn for all tokens with different decimal values
-            } else {
-                let (value, is_valid) = self.pragma_oracle.price(pool_id, asset);
-                AssetPrice { value, is_valid }
+            let asset_type = self.is_custom_asset.read(asset);
+            match asset_type {
+                AssetType::BasicERC4626 => {
+                    let disp = IERC4626Dispatcher {contract_address: asset};
+                    let deposit_asset = disp.asset();
+                    let (asset_price, _) = self.pragma_oracle.price(pool_id, deposit_asset);
+                    let assets = disp.convert_to_assets(SCALE);
+                    let value = (asset_price * assets) / SCALE;
+                    return AssetPrice { value, is_valid: true };
+                },
+                AssetType::EkuboVault => {
+                    let (asset0, asset1) = self.custom_assets.read(asset);
+                    let (asset0_price, _) = self.pragma_oracle.price(pool_id, asset0);
+                    let (asset1_price, _) = self.pragma_oracle.price(pool_id, asset1);
+                    let assets = IClVaultDispatcher { contract_address: asset }
+                        .convert_to_assets(SCALE);
+                    let decimals0 = ERC20Helper::decimals(asset0);
+                    let decimals1 = ERC20Helper::decimals(asset1);
+                    // todo...change 18 to token decimals
+                    let value = ((assets.amount0 * asset0_price) / pow::ten_pow(decimals0.into())) + ((assets.amount1 * asset1_price) / pow::ten_pow(decimals1.into()));
+                    return AssetPrice { value, is_valid: true };
+                },
+                AssetType::None => {
+                    // Native Asset
+                    let (value, is_valid) = self.pragma_oracle.price(pool_id, asset);
+                    return AssetPrice { value, is_valid };
+                }
             }
+            let (value, is_valid) = self.pragma_oracle.price(pool_id, asset);
+            AssetPrice { value, is_valid }
         }
 
 

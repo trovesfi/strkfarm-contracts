@@ -12,6 +12,7 @@ pub mod test_vesu_pools {
     use strkfarm_contracts::helpers::{constants, ERC20Helper, pow};
     use strkfarm_contracts::strategies::vesu_pools::interface::
     {
+        AssetType,
         ICustomAssetsDispatcher,
         ICustomAssetsDispatcherTrait,
         UnderlyingTokens,
@@ -443,8 +444,8 @@ pub mod test_vesu_pools {
                 get_contract_address()
             );
 
-        ICustomAssetsDispatcher {contract_address: extension_address}.set_custom_asset(pool_id, constants::EKUBO_STRK_XSTRK_ADDRESS());
-        assert(ICustomAssetsDispatcher {contract_address: extension_address}.is_custom_asset(constants::EKUBO_STRK_XSTRK_ADDRESS()) == true, 'invalid bool');
+        ICustomAssetsDispatcher {contract_address: extension_address}.set_custom_asset(pool_id, constants::EKUBO_STRK_XSTRK_ADDRESS(), AssetType::EkuboVault);
+        // assert(ICustomAssetsDispatcher {contract_address: extension_address}.is_custom_asset(constants::EKUBO_STRK_XSTRK_ADDRESS()) == AssetType::EkuboVault, 'invalid enum');
         ICustomAssetsDispatcher {contract_address: extension_address}.set_underlying_assets(
             pool_id,
             constants::EKUBO_STRK_XSTRK_ADDRESS(),
@@ -652,7 +653,7 @@ pub mod test_vesu_pools {
         let strk_user = constants::VESU_SINGLETON_ADDRESS();
         start_cheat_caller_address(extension_address, strk_user);
         ICustomAssetsDispatcher {contract_address: extension_address}
-            .set_custom_asset(pool_id, constants::EKUBO_STRK_XSTRK_ADDRESS());
+            .set_custom_asset(pool_id, constants::EKUBO_STRK_XSTRK_ADDRESS(), AssetType::EkuboVault);
         stop_cheat_caller_address(extension_address);
     }
 

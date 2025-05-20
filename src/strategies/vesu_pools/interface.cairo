@@ -10,6 +10,14 @@ use vesu::{
     vendor::pragma::{AggregationMode}
 };
 
+#[derive(Copy, Drop, Serde, starknet::Store)]
+pub enum AssetType {
+    #[default]
+    None,
+    BasicERC4626,
+    EkuboVault
+}
+
 #[derive(PartialEq, Copy, Drop, Serde)]
 pub struct UnderlyingTokens {
     pub asset1: ContractAddress,
@@ -53,9 +61,9 @@ pub struct FeeParams {
 
 #[starknet::interface]
 pub trait ICustomAssets<TContractState> {
-    fn is_custom_asset(self: @TContractState, asset: ContractAddress) -> bool;
+    fn is_custom_asset(self: @TContractState, asset: ContractAddress) -> AssetType;
     fn underlying_assets(self: @TContractState, asset: ContractAddress) -> (ContractAddress, ContractAddress);
-    fn set_custom_asset(ref self: TContractState, pool_id: felt252, asset: ContractAddress);
+    fn set_custom_asset(ref self: TContractState, pool_id: felt252, asset: ContractAddress, asset_type: AssetType);
     fn set_underlying_assets(ref self: TContractState, pool_id: felt252, custom_asset: ContractAddress, asset0: ContractAddress, asset1: ContractAddress);
 }
 
