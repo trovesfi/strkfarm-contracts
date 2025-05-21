@@ -1,12 +1,13 @@
-import { ContractAddr, DualActionAmount, EkuboCLVault, EkuboCLVaultStrategies, getMainnetConfig, Global, Pricer, PricerRedis, Web3Number } from "@strkfarm/sdk";
+import { ContractAddr, DualActionAmount, EkuboCLVault, EkuboCLVaultStrategies, getMainnetConfig, Global, Pricer, PricerFromApi, PricerRedis, Web3Number } from "@strkfarm/sdk";
 import { getAccount, getRpcProvider } from "../lib/utils";
 import { STRK, xSTRK } from "../lib/constants";
 
 async function main() {
     const provider = getRpcProvider();
     const config = getMainnetConfig();
-    const pricer = new PricerRedis(config, await Global.getTokens());
-    await pricer.initRedis(process.env.REDIS_URL!);
+    // const pricer = new PricerRedis(config, await Global.getTokens());
+    // await pricer.initRedis(process.env.REDIS_URL!);
+    const pricer = new PricerFromApi(config, await Global.getTokens());
     console.log('Pricer ready');
 
     const mod = new EkuboCLVault(config, pricer, EkuboCLVaultStrategies[1]);
