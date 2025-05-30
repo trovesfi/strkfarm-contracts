@@ -6,7 +6,7 @@ mod VesuRebalance {
     use strkfarm_contracts::components::common::CommonComp;
     use strkfarm_contracts::components::vesu::{vesuStruct, vesuSettingsImpl};
     use strkfarm_contracts::interfaces::IVesu::{
-        IStonDispatcherTrait, IVesuExtensionDispatcher, IVesuExtensionDispatcherTrait
+        IStonDispatcherTrait, IStonDispatcher, IVesuExtensionDispatcher, IVesuExtensionDispatcherTrait
     };
     use strkfarm_contracts::components::harvester::reward_shares::{
         RewardShareComponent, IRewardShare
@@ -36,6 +36,7 @@ mod VesuRebalance {
     };
     use strkfarm_contracts::interfaces::oracle::{IPriceOracleDispatcher};
     use core::num::traits::Zero;
+    use openzeppelin::token::erc20::interface::{ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
 
     component!(path: ERC4626Component, storage: erc4626, event: ERC4626Event);
     component!(path: RewardShareComponent, storage: reward_share, event: RewardShareEvent);
@@ -61,7 +62,7 @@ mod VesuRebalance {
     impl ReentrancyGuardInternalImpl = ReentrancyGuardComponent::InternalImpl<ContractState>;
 
     use strkfarm_contracts::strategies::vesu_rebalance::interface::{
-        IVesuRebal, Action, Feature, PoolProps, Settings
+        IVesuRebal, Action, Feature, PoolProps, Settings, IVesuMigrate, IVesuTokenV2Dispatcher, IVesuTokenV2DispatcherTrait
     };
 
     pub mod Errors {
@@ -366,6 +367,80 @@ mod VesuRebalance {
                         baseAmount: post_bal - pre_bal,
                     }
                 );
+        }
+    }
+
+    #[abi(embed_v0)]
+    impl VesuMigrateImpl of IVesuMigrate<ContractState> {
+        fn vesu_migrate(
+            ref self: ContractState,
+            new_singleton: ContractAddress,
+            old_pool_tokens: Array<ContractAddress>,
+            new_pool_tokens: Array<ContractAddress>,
+        ) {
+            self.common.assert_admin_role();
+
+            // update vesu settings
+            let vesu_settings = self.vesu_settings.read();
+            let mut new_vesu_settings = vesuStruct {
+                pool_id: vesu_settings.pool_id,
+                debt: vesu_settings.debt,
+                col: vesu_settings.col,
+                oracle: vesu_settings.oracle,
+                singleton: IStonDispatcher {
+                    contract_address: new_singleton,
+                },
+            };
+            self.vesu_settings.write(new_vesu_settings);
+
+            // update allowed pools
+            let mut allowed_pools = self.get_allowed_pools();
+            assert(old_pool_tokens.len() == new_pool_tokens.len(), 'Invalid pools len');
+            assert(old_pool_tokens.len() == allowed_pools.len(), 'Invalid allowed pools len');
+
+            let mut new_allowed_pools: Array<PoolProps> = array![];
+            let mut i = 0;
+            loop {
+                if (i == old_pool_tokens.len()) {
+                    break;
+                }
+                let old_v_token = *old_pool_tokens.at(i);
+                let new_v_token = *new_pool_tokens.at(i);
+                let allowed_pool_info = *allowed_pools.at(i);
+                assert(old_v_token == allowed_pool_info.v_token, 'Invalid pool config');
+
+                let new_pool = PoolProps {
+                    pool_id: allowed_pool_info.pool_id,
+                    max_weight: allowed_pool_info.max_weight,
+                    v_token: new_v_token,
+                };
+
+                // migrate
+                // approve vTokens to v2
+                let bal = ERC20Helper::balanceOf(old_v_token, get_contract_address());
+                if (bal > 0) {
+                    ERC20Helper::approve(
+                        old_v_token, new_v_token, bal
+                    );
+                    let v2Disp = IVesuTokenV2Dispatcher { contract_address: new_v_token };
+                    v2Disp.migrate_v_token();
+                    let newBal = ERC20Helper::balanceOf(new_v_token, get_contract_address());
+                    assert(newBal == bal, 'Invalid vToken v2 balance');
+                }
+
+                // assert same name/symbol
+                let newVToken = IVesuTokenV2Dispatcher {
+                    contract_address: new_v_token,
+                };
+                let v1Token = newVToken.v_token_v1();
+                assert(v1Token == old_v_token, 'Invalid vToken v1');
+                // add to new allowed pools
+                new_allowed_pools.append(new_pool);
+                i += 1;
+            };
+
+            // set new allowed pools
+            self._set_pool_settings(new_allowed_pools);
         }
     }
 
