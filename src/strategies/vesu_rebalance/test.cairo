@@ -20,7 +20,8 @@ pub mod test_vesu_rebalance {
     use strkfarm_contracts::interfaces::IVesu::{IStonDispatcher};
     use openzeppelin::token::erc20::interface::{IERC20MixinDispatcher, IERC20MixinDispatcherTrait};
     use strkfarm_contracts::strategies::vesu_rebalance::interface::{
-        IVesuRebalDispatcher, IVesuRebalDispatcherTrait, IVesuMigrateDispatcher, IVesuMigrateDispatcherTrait
+        IVesuRebalDispatcher, IVesuRebalDispatcherTrait, IVesuMigrateDispatcher,
+        IVesuMigrateDispatcherTrait
     };
     use strkfarm_contracts::interfaces::IERC4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
     use strkfarm_contracts::interfaces::IEkuboDistributor::{Claim};
@@ -700,7 +701,9 @@ pub mod test_vesu_rebalance {
     #[test]
     #[fork("mainnet_1446151")]
     fn test_v2_migration() {
-        let vault = contract_address_const::<0x00a858c97e9454f407d1bd7c57472fc8d8d8449a777c822b41d18e387816f29c>();
+        let vault = contract_address_const::<
+            0x00a858c97e9454f407d1bd7c57472fc8d8d8449a777c822b41d18e387816f29c
+        >();
         let vesu_vault = IERC4626Dispatcher { contract_address: vault };
 
         // config
@@ -708,8 +711,10 @@ pub mod test_vesu_rebalance {
         let total_supply_pre = ERC20Helper::total_supply(vault);
         println!("Total assets before migration: {:?}", total_assets_pre);
         println!("Total supply before migration: {:?}", total_supply_pre);
-        
-        let user = contract_address_const::<0x0790C2340c4CB61AeA6c253Dc8Fcd115196d5bCdC35aF0260e0d6A727a474ff6>();
+
+        let user = contract_address_const::<
+            0x0790C2340c4CB61AeA6c253Dc8Fcd115196d5bCdC35aF0260e0d6A727a474ff6
+        >();
         let user_shares = ERC20Helper::balanceOf(vault, user);
         println!("User shares before migration: {:?}", user_shares);
 
@@ -717,35 +722,67 @@ pub mod test_vesu_rebalance {
         let cls = declare("VesuRebalance").unwrap().contract_class();
         replace_bytecode(vault, *cls.class_hash).unwrap();
 
-        let timelock = contract_address_const::<0x0613a26e199f9bafa9418567f4ef0d78e9496a8d6aab15fba718a2ec7f2f2f69>();
-        let new_singleton = contract_address_const::<0x000d8d6dfec4d33bfb6895de9f3852143a17c6f92fd2a21da3d6924d34870160>();
+        let timelock = contract_address_const::<
+            0x0613a26e199f9bafa9418567f4ef0d78e9496a8d6aab15fba718a2ec7f2f2f69
+        >();
+        let new_singleton = contract_address_const::<
+            0x000d8d6dfec4d33bfb6895de9f3852143a17c6f92fd2a21da3d6924d34870160
+        >();
         let old_v_tokens: Array<ContractAddress> = array![
-            contract_address_const::<0x1610abab2ff987cdfb5e73cccbf7069cbb1a02bbfa5ee31d97cc30e29d89090>(),
-            contract_address_const::<0x28795e04b2abaf61266faa81cc02d4d1a6ef8574fef383cdf6185ca580648aa>(),
-            contract_address_const::<0x17f19582c61479f2fe0b6606300e975c0a8f439102f43eeecc1d0e9b3d84350>(),
-            contract_address_const::<0x383c278dac0a6f2dae49960dfd189af5ded9a42b4a1f7c2b00b8d11ff82ff5d>(),
-            contract_address_const::<0x7b207a4f928f1b729c9ad26da5e99d6a13b3a23216c597ad545390048cd051f>(),
-            contract_address_const::<0x4d6cb9637b9af77fa7bfe4336777279eb8766ba30652e5186edc681effc0601>(),
-            contract_address_const::<0x13ff7f2ad3e9ae7c94391b8271d5ab84f0ba7d59e33f781f3202829e41a028b>(),
-            contract_address_const::<0x7d7b4fa4701a6e065e9bb1a6dc927b1513cea42dbdafd0168ed64070d136fc6>(),
+            contract_address_const::<
+                0x1610abab2ff987cdfb5e73cccbf7069cbb1a02bbfa5ee31d97cc30e29d89090
+            >(),
+            contract_address_const::<
+                0x28795e04b2abaf61266faa81cc02d4d1a6ef8574fef383cdf6185ca580648aa
+            >(),
+            contract_address_const::<
+                0x17f19582c61479f2fe0b6606300e975c0a8f439102f43eeecc1d0e9b3d84350
+            >(),
+            contract_address_const::<
+                0x383c278dac0a6f2dae49960dfd189af5ded9a42b4a1f7c2b00b8d11ff82ff5d
+            >(),
+            contract_address_const::<
+                0x7b207a4f928f1b729c9ad26da5e99d6a13b3a23216c597ad545390048cd051f
+            >(),
+            contract_address_const::<
+                0x4d6cb9637b9af77fa7bfe4336777279eb8766ba30652e5186edc681effc0601
+            >(),
+            contract_address_const::<
+                0x13ff7f2ad3e9ae7c94391b8271d5ab84f0ba7d59e33f781f3202829e41a028b
+            >(),
+            contract_address_const::<
+                0x7d7b4fa4701a6e065e9bb1a6dc927b1513cea42dbdafd0168ed64070d136fc6
+            >(),
         ];
         let new_v_tokens: Array<ContractAddress> = array![
-            contract_address_const::<0x0227942991ea19a1843ed6d28af9458cf2566a3c2d6fccb2fd28f0424fce44b4>(),
-            contract_address_const::<0x079824ac0f81aa0e4483628c3365c09fa74d86650fadccb2a733284d3a0a8b85>(),
-            contract_address_const::<0x048f4e75c12ca9d35d6172b1cb5f1f70b094888003f9c94fe19f12a67947fd6d>(),
-            contract_address_const::<0x02814990be52a1f8532d100f22cb26ad6aeda2928abc18480e409ef75df8ce84>(),
-            contract_address_const::<0x01273cb69dbd8f0329533bcefc09391baff9ef88d31efce36bbb024cb0c0e0cc>(),
-            contract_address_const::<0x030902db47321a71202d4473a59b54db2b1ad11897a0328ead363db7e9dce4c8>(),
-            contract_address_const::<0x072803e813eb69d9aaea1c458ed779569c81bde0a2fc03ea2869876d13fa08d4>(),
-            contract_address_const::<0x0150a0af5a972d0d0b4e6a87c21afe68f12dd4abcd7bc6f67cb49dbbec518238>(),
+            contract_address_const::<
+                0x0227942991ea19a1843ed6d28af9458cf2566a3c2d6fccb2fd28f0424fce44b4
+            >(),
+            contract_address_const::<
+                0x079824ac0f81aa0e4483628c3365c09fa74d86650fadccb2a733284d3a0a8b85
+            >(),
+            contract_address_const::<
+                0x048f4e75c12ca9d35d6172b1cb5f1f70b094888003f9c94fe19f12a67947fd6d
+            >(),
+            contract_address_const::<
+                0x02814990be52a1f8532d100f22cb26ad6aeda2928abc18480e409ef75df8ce84
+            >(),
+            contract_address_const::<
+                0x01273cb69dbd8f0329533bcefc09391baff9ef88d31efce36bbb024cb0c0e0cc
+            >(),
+            contract_address_const::<
+                0x030902db47321a71202d4473a59b54db2b1ad11897a0328ead363db7e9dce4c8
+            >(),
+            contract_address_const::<
+                0x072803e813eb69d9aaea1c458ed779569c81bde0a2fc03ea2869876d13fa08d4
+            >(),
+            contract_address_const::<
+                0x0150a0af5a972d0d0b4e6a87c21afe68f12dd4abcd7bc6f67cb49dbbec518238
+            >(),
         ];
         start_cheat_caller_address(vault, timelock);
-        IVesuMigrateDispatcher {
-            contract_address: vault
-        }.vesu_migrate(
-            new_singleton,
-            old_v_tokens, new_v_tokens
-        );
+        IVesuMigrateDispatcher { contract_address: vault }
+            .vesu_migrate(new_singleton, old_v_tokens, new_v_tokens);
         stop_cheat_caller_address(vault);
         println!("Vesu vault migration completed");
 
@@ -760,9 +797,7 @@ pub mod test_vesu_rebalance {
 
         // approve and deposit
         start_cheat_caller_address(constants::USDC_ADDRESS(), user);
-        ERC20Helper::approve(
-            constants::USDC_ADDRESS(), vault, 1000 * pow::ten_pow(6)
-        );
+        ERC20Helper::approve(constants::USDC_ADDRESS(), vault, 1000 * pow::ten_pow(6));
         stop_cheat_caller_address(constants::USDC_ADDRESS());
 
         // deposit 1000 USDC
@@ -770,7 +805,7 @@ pub mod test_vesu_rebalance {
         vesu_vault.deposit(1000 * pow::ten_pow(6), user);
         stop_cheat_caller_address(vault);
     }
-    
+
 
     fn STRKETHAvnuSwapInfo(amount: u256, beneficiary: ContractAddress) -> AvnuMultiRouteSwap {
         let additional1: Array<felt252> = array![

@@ -6,7 +6,8 @@ mod VesuRebalance {
     use strkfarm_contracts::components::common::CommonComp;
     use strkfarm_contracts::components::vesu::{vesuStruct, vesuSettingsImpl};
     use strkfarm_contracts::interfaces::IVesu::{
-        IStonDispatcherTrait, IStonDispatcher, IVesuExtensionDispatcher, IVesuExtensionDispatcherTrait
+        IStonDispatcherTrait, IStonDispatcher, IVesuExtensionDispatcher,
+        IVesuExtensionDispatcherTrait
     };
     use strkfarm_contracts::components::harvester::reward_shares::{
         RewardShareComponent, IRewardShare
@@ -62,7 +63,8 @@ mod VesuRebalance {
     impl ReentrancyGuardInternalImpl = ReentrancyGuardComponent::InternalImpl<ContractState>;
 
     use strkfarm_contracts::strategies::vesu_rebalance::interface::{
-        IVesuRebal, Action, Feature, PoolProps, Settings, IVesuMigrate, IVesuTokenV2Dispatcher, IVesuTokenV2DispatcherTrait
+        IVesuRebal, Action, Feature, PoolProps, Settings, IVesuMigrate, IVesuTokenV2Dispatcher,
+        IVesuTokenV2DispatcherTrait
     };
 
     pub mod Errors {
@@ -387,9 +389,7 @@ mod VesuRebalance {
                 debt: vesu_settings.debt,
                 col: vesu_settings.col,
                 oracle: vesu_settings.oracle,
-                singleton: IStonDispatcher {
-                    contract_address: new_singleton,
-                },
+                singleton: IStonDispatcher { contract_address: new_singleton, },
             };
             self.vesu_settings.write(new_vesu_settings);
 
@@ -419,9 +419,7 @@ mod VesuRebalance {
                 // approve vTokens to v2
                 let bal = ERC20Helper::balanceOf(old_v_token, get_contract_address());
                 if (bal > 0) {
-                    ERC20Helper::approve(
-                        old_v_token, new_v_token, bal
-                    );
+                    ERC20Helper::approve(old_v_token, new_v_token, bal);
                     let v2Disp = IVesuTokenV2Dispatcher { contract_address: new_v_token };
                     v2Disp.migrate_v_token();
                     let newBal = ERC20Helper::balanceOf(new_v_token, get_contract_address());
@@ -429,9 +427,7 @@ mod VesuRebalance {
                 }
 
                 // assert same name/symbol
-                let newVToken = IVesuTokenV2Dispatcher {
-                    contract_address: new_v_token,
-                };
+                let newVToken = IVesuTokenV2Dispatcher { contract_address: new_v_token, };
                 let v1Token = newVToken.v_token_v1();
                 assert(v1Token == old_v_token, 'Invalid vToken v1');
                 // add to new allowed pools

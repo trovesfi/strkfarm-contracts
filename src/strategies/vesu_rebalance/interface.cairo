@@ -62,9 +62,7 @@ pub trait IVesuRebal<TContractState> {
 
 #[starknet::interface]
 pub trait IVesuTokenV2<TContractState> {
-    fn migrate_v_token(
-        ref self: TContractState,
-    );
+    fn migrate_v_token(ref self: TContractState,);
     fn v_token_v1(self: @TContractState) -> ContractAddress;
 }
 
