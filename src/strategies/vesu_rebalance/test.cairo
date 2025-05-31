@@ -5,7 +5,7 @@ pub mod test_vesu_rebalance {
         start_cheat_block_number_global, start_cheat_block_timestamp_global,
     };
     use starknet::contract_address::contract_address_const;
-    use snforge_std::{DeclareResultTrait};
+    use snforge_std::{DeclareResultTrait, replace_bytecode};
     use starknet::{ContractAddress, get_contract_address, get_block_timestamp};
     use strkfarm_contracts::helpers::constants;
     use strkfarm_contracts::components::ekuboSwap::{ekuboSwapImpl};
@@ -20,7 +20,8 @@ pub mod test_vesu_rebalance {
     use strkfarm_contracts::interfaces::IVesu::{IStonDispatcher};
     use openzeppelin::token::erc20::interface::{IERC20MixinDispatcher, IERC20MixinDispatcherTrait};
     use strkfarm_contracts::strategies::vesu_rebalance::interface::{
-        IVesuRebalDispatcher, IVesuRebalDispatcherTrait
+        IVesuRebalDispatcher, IVesuRebalDispatcherTrait, IVesuMigrateDispatcher,
+        IVesuMigrateDispatcherTrait
     };
     use strkfarm_contracts::interfaces::IERC4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
     use strkfarm_contracts::interfaces::IEkuboDistributor::{Claim};
@@ -696,6 +697,86 @@ pub mod test_vesu_rebalance {
         vesu_vault.harvest(snf_defi_spring.contract_address, claim, proofs.span(), swap_params);
         stop_cheat_caller_address(vesu_address);
     }
+
+    #[test]
+    #[fork("mainnet_1446151")]
+    fn test_v2_migration() {
+        let vault = contract_address_const::<
+            0x00a858c97e9454f407d1bd7c57472fc8d8d8449a777c822b41d18e387816f29c
+        >();
+        let vesu_vault = IERC4626Dispatcher { contract_address: vault };
+
+        // config
+        let total_assets_pre = vesu_vault.total_assets();
+        let total_supply_pre = ERC20Helper::total_supply(vault);
+        println!("Total assets before migration: {:?}", total_assets_pre);
+        println!("Total supply before migration: {:?}", total_supply_pre);
+
+        let user = contract_address_const::<
+            0x0790C2340c4CB61AeA6c253Dc8Fcd115196d5bCdC35aF0260e0d6A727a474ff6
+        >();
+        let user_shares = ERC20Helper::balanceOf(vault, user);
+        println!("User shares before migration: {:?}", user_shares);
+
+        // upgrade
+        let cls = declare("VesuRebalance").unwrap().contract_class();
+        replace_bytecode(vault, *cls.class_hash).unwrap();
+
+        let timelock = contract_address_const::<
+            0x0613a26e199f9bafa9418567f4ef0d78e9496a8d6aab15fba718a2ec7f2f2f69
+        >();
+        let new_singleton = contract_address_const::<
+            0x000d8d6dfec4d33bfb6895de9f3852143a17c6f92fd2a21da3d6924d34870160
+        >();
+        let new_v_tokens: Array<ContractAddress> = array![
+            contract_address_const::<
+                0x0227942991ea19a1843ed6d28af9458cf2566a3c2d6fccb2fd28f0424fce44b4
+            >(),
+            contract_address_const::<
+                0x079824ac0f81aa0e4483628c3365c09fa74d86650fadccb2a733284d3a0a8b85
+            >(),
+            contract_address_const::<
+                0x048f4e75c12ca9d35d6172b1cb5f1f70b094888003f9c94fe19f12a67947fd6d
+            >(),
+            contract_address_const::<
+                0x02814990be52a1f8532d100f22cb26ad6aeda2928abc18480e409ef75df8ce84
+            >(),
+            contract_address_const::<
+                0x01273cb69dbd8f0329533bcefc09391baff9ef88d31efce36bbb024cb0c0e0cc
+            >(),
+            contract_address_const::<
+                0x030902db47321a71202d4473a59b54db2b1ad11897a0328ead363db7e9dce4c8
+            >(),
+            contract_address_const::<
+                0x072803e813eb69d9aaea1c458ed779569c81bde0a2fc03ea2869876d13fa08d4
+            >(),
+        ];
+        start_cheat_caller_address(vault, timelock);
+        IVesuMigrateDispatcher { contract_address: vault }
+            .vesu_migrate(new_singleton, new_v_tokens);
+        stop_cheat_caller_address(vault);
+        println!("Vesu vault migration completed");
+
+        // post config
+        let total_assets_post = vesu_vault.total_assets();
+        let total_supply_post = ERC20Helper::total_supply(vault);
+        println!("Total assets after migration: {:?}", total_assets_post);
+        println!("Total supply after migration: {:?}", total_supply_post);
+
+        let user_shares_post = ERC20Helper::balanceOf(vault, user);
+        println!("User shares after migration: {:?}", user_shares_post);
+
+        // approve and deposit
+        start_cheat_caller_address(constants::USDC_ADDRESS(), user);
+        ERC20Helper::approve(constants::USDC_ADDRESS(), vault, 1000 * pow::ten_pow(6));
+        stop_cheat_caller_address(constants::USDC_ADDRESS());
+
+        // deposit 1000 USDC
+        start_cheat_caller_address(vault, user);
+        vesu_vault.deposit(1000 * pow::ten_pow(6), user);
+        stop_cheat_caller_address(vault);
+    }
+
 
     fn STRKETHAvnuSwapInfo(amount: u256, beneficiary: ContractAddress) -> AvnuMultiRouteSwap {
         let additional1: Array<felt252> = array![

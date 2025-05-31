@@ -58,3 +58,19 @@ pub trait IVesuRebal<TContractState> {
     fn get_allowed_pools(self: @TContractState) -> Array<PoolProps>;
     fn get_previous_index(self: @TContractState) -> u128;
 }
+
+
+#[starknet::interface]
+pub trait IVesuTokenV2<TContractState> {
+    fn migrate_v_token(ref self: TContractState,);
+    fn v_token_v1(self: @TContractState) -> ContractAddress;
+}
+
+#[starknet::interface]
+pub trait IVesuMigrate<TContractState> {
+    fn vesu_migrate(
+        ref self: TContractState,
+        new_singleton: ContractAddress,
+        new_pool_tokens: Array<ContractAddress>,
+    );
+}
