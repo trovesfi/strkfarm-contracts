@@ -71,7 +71,6 @@ pub trait IVesuMigrate<TContractState> {
     fn vesu_migrate(
         ref self: TContractState,
         new_singleton: ContractAddress,
-        old_pool_tokens: Array<ContractAddress>,
         new_pool_tokens: Array<ContractAddress>,
     );
 }

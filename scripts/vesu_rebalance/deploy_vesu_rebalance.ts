@@ -3,6 +3,7 @@ import { ACCESS_CONTROL, accountKeyMap, ETH, ORACLE_OURS, STRK, SUPER_ADMIN, USD
 import { deployContract, getAccount, getRpcProvider, myDeclare } from "../lib/utils";
 import { ContractAddr, VesuRebalance, VesuRebalanceStrategies } from "@strkfarm/sdk";
 import { executeBatch, scheduleBatch } from "../timelock/actions";
+import VesuVTokensMapping from "./vesu_v_tokens_mapping.json";
 
 type PoolConfig = {
     pool_id: string; 
@@ -153,7 +154,9 @@ async function getUSDTConfig() {
 
 
 async function upgrade() {
-    const { class_hash } = await myDeclare("VesuRebalance");
+    // const { class_hash } = await myDeclare("VesuRebalance");
+    // return;
+    const class_hash = '0x3e38633575557468ef2f44194d35f4fcaeb87494495148a2f6ac6a885f4f660';
     // ! ensure the addr is correct
     const addresses = VesuRebalanceStrategies.map((s) => s.address.address);
     if (!addresses.length) {
@@ -176,6 +179,50 @@ async function upgrade() {
         successStates: [TransactionExecutionStatus.SUCCEEDED]
     });
     console.log(`Upgrade done`);
+
+}
+
+async function vesuMigrate() {
+    // ! ensure the addr is correct
+    const addresses = VesuRebalanceStrategies.map((s) => s.address.address);
+    if (!addresses.length) {
+        throw new Error('No strategy found');
+    }
+    const acc = getAccount(accountKeyMap[SUPER_ADMIN]);
+    const cls = await getRpcProvider().getClassAt(addresses[0]);
+    const calls: Call[] = [];
+    const newSingleton = '0x000d8d6dfec4d33bfb6895de9f3852143a17c6f92fd2a21da3d6924d34870160';
+    const cleanedVTokens: any = {};
+    Object.entries(VesuVTokensMapping).map(data => {
+        const [key, value] = data;
+        cleanedVTokens[ContractAddr.from(key).address] = value;
+    })
+    for (let addr of addresses) {
+        const contract = new Contract(cls.abi, addr, getRpcProvider());
+        const allowedPools: any[] = await contract.call('get_allowed_pools') as any[];
+        const newVTokens = allowedPools.map((pool: any) => {
+            const allowedVToken = ContractAddr.from(num.getHexString(pool.v_token.toString()));
+            const vToken = cleanedVTokens[allowedVToken.address];
+            if (!vToken) {
+                throw new Error(`No vToken found for poolId: ${allowedVToken.address}`);
+            }
+            return vToken;
+        });
+        const call = contract.populate("vesu_migrate", [
+            newSingleton,
+            newVTokens
+        ]);
+        calls.push(call);
+    }
+
+    const scheduleCall = await scheduleBatch(calls, "0", "0x0", true);
+    const executeCall = await executeBatch(calls, "0", "0x0", true);
+    const tx = await acc.execute([...scheduleCall, ...executeCall]);
+    console.log(`VesuMigrate scheduled. tx: ${tx.transaction_hash}`);
+    await getRpcProvider().waitForTransaction(tx.transaction_hash, {
+        successStates: [TransactionExecutionStatus.SUCCEEDED]
+    });
+    console.log(`VesuMigrate done`);
 
 }
 
@@ -206,5 +253,6 @@ if (require.main === module) {
     }
 
     // run()
-    upgrade()
+    // upgrade()
+    vesuMigrate();
 }

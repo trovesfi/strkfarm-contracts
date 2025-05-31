@@ -728,32 +728,6 @@ pub mod test_vesu_rebalance {
         let new_singleton = contract_address_const::<
             0x000d8d6dfec4d33bfb6895de9f3852143a17c6f92fd2a21da3d6924d34870160
         >();
-        let old_v_tokens: Array<ContractAddress> = array![
-            contract_address_const::<
-                0x1610abab2ff987cdfb5e73cccbf7069cbb1a02bbfa5ee31d97cc30e29d89090
-            >(),
-            contract_address_const::<
-                0x28795e04b2abaf61266faa81cc02d4d1a6ef8574fef383cdf6185ca580648aa
-            >(),
-            contract_address_const::<
-                0x17f19582c61479f2fe0b6606300e975c0a8f439102f43eeecc1d0e9b3d84350
-            >(),
-            contract_address_const::<
-                0x383c278dac0a6f2dae49960dfd189af5ded9a42b4a1f7c2b00b8d11ff82ff5d
-            >(),
-            contract_address_const::<
-                0x7b207a4f928f1b729c9ad26da5e99d6a13b3a23216c597ad545390048cd051f
-            >(),
-            contract_address_const::<
-                0x4d6cb9637b9af77fa7bfe4336777279eb8766ba30652e5186edc681effc0601
-            >(),
-            contract_address_const::<
-                0x13ff7f2ad3e9ae7c94391b8271d5ab84f0ba7d59e33f781f3202829e41a028b
-            >(),
-            contract_address_const::<
-                0x7d7b4fa4701a6e065e9bb1a6dc927b1513cea42dbdafd0168ed64070d136fc6
-            >(),
-        ];
         let new_v_tokens: Array<ContractAddress> = array![
             contract_address_const::<
                 0x0227942991ea19a1843ed6d28af9458cf2566a3c2d6fccb2fd28f0424fce44b4
@@ -776,13 +750,10 @@ pub mod test_vesu_rebalance {
             contract_address_const::<
                 0x072803e813eb69d9aaea1c458ed779569c81bde0a2fc03ea2869876d13fa08d4
             >(),
-            contract_address_const::<
-                0x0150a0af5a972d0d0b4e6a87c21afe68f12dd4abcd7bc6f67cb49dbbec518238
-            >(),
         ];
         start_cheat_caller_address(vault, timelock);
         IVesuMigrateDispatcher { contract_address: vault }
-            .vesu_migrate(new_singleton, old_v_tokens, new_v_tokens);
+            .vesu_migrate(new_singleton, new_v_tokens);
         stop_cheat_caller_address(vault);
         println!("Vesu vault migration completed");
 

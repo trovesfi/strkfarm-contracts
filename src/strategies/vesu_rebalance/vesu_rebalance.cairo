@@ -37,7 +37,6 @@ mod VesuRebalance {
     };
     use strkfarm_contracts::interfaces::oracle::{IPriceOracleDispatcher};
     use core::num::traits::Zero;
-    use openzeppelin::token::erc20::interface::{ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
 
     component!(path: ERC4626Component, storage: erc4626, event: ERC4626Event);
     component!(path: RewardShareComponent, storage: reward_share, event: RewardShareEvent);
@@ -377,7 +376,6 @@ mod VesuRebalance {
         fn vesu_migrate(
             ref self: ContractState,
             new_singleton: ContractAddress,
-            old_pool_tokens: Array<ContractAddress>,
             new_pool_tokens: Array<ContractAddress>,
         ) {
             self.common.assert_admin_role();
@@ -395,18 +393,17 @@ mod VesuRebalance {
 
             // update allowed pools
             let mut allowed_pools = self.get_allowed_pools();
-            assert(old_pool_tokens.len() == new_pool_tokens.len(), 'Invalid pools len');
-            assert(old_pool_tokens.len() == allowed_pools.len(), 'Invalid allowed pools len');
+            assert(new_pool_tokens.len() == allowed_pools.len(), 'Invalid allowed pools len');
 
             let mut new_allowed_pools: Array<PoolProps> = array![];
             let mut i = 0;
             loop {
-                if (i == old_pool_tokens.len()) {
+                if (i == new_pool_tokens.len()) {
                     break;
                 }
-                let old_v_token = *old_pool_tokens.at(i);
                 let new_v_token = *new_pool_tokens.at(i);
                 let allowed_pool_info = *allowed_pools.at(i);
+                let old_v_token = allowed_pool_info.v_token;
                 assert(old_v_token == allowed_pool_info.v_token, 'Invalid pool config');
 
                 let new_pool = PoolProps {
