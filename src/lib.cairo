@@ -48,12 +48,17 @@ pub mod strategies {
         pub mod cl_vault;
         #[cfg(test)]
         pub mod test;
+        #[cfg(test)]
+        pub mod tests {
+            pub mod test_multi_pool_liquidity;
+        }
     }
 }
 
 #[cfg(test)]
 pub mod tests {
     pub mod utils;
+    pub mod ekubo;
 }
 
 pub mod mocks {
