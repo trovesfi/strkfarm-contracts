@@ -36,8 +36,9 @@ function createBounds(
     };
 }
 
-function priceToTick(price: number, isRoundDown: boolean, tickSpacing: number) {
-    const value = isRoundDown ? Math.floor(Math.log(price) / Math.log(1.000001)) : Math.ceil(Math.log(price) / Math.log(1.000001));
+function priceToTick(price: number, isRoundDown: boolean, tickSpacing: number, token0Decimals: number, token1Decimals: number) {
+    const adjustedprice = price * (10 ** (token1Decimals)) / (10 ** (token0Decimals));
+    const value = isRoundDown ? Math.floor(Math.log(adjustedprice) / Math.log(1.000001)) : Math.ceil(Math.log(adjustedprice) / Math.log(1.000001));
     const tick = Math.floor(value / tickSpacing) * tickSpacing;
     if (tick < 0) {
         return {
@@ -101,8 +102,8 @@ async function rebalance() {
 
     // ! Ensure correct bounds
     const bounds = createBounds(
-        priceToTick(1.033, true, 200),
-        priceToTick(1.036, false, 200)
+        priceToTick(1.033, true, 200, 18, 6),
+        priceToTick(1.036, false, 200, 18, 6)
     );
     const swapInfo = await getSwapInfo(
         xSTRK,
@@ -152,27 +153,28 @@ async function upgrade() {
 if (require.main === module) {
     // deploy cl vault
     const poolKey = createPoolKey(
+        STRK,
         USDC,
-        USDT,
-        '6805647338418769825990228293189632',
-        20,
+        '170141183460469235273462165868118016',
+        1000,
         0
     );
 
     const bounds = createBounds(
-        priceToTick(1.00006, false, poolKey.tick_spacing),
-        priceToTick(1.00012, false, poolKey.tick_spacing)
+        priceToTick(0.10, false, poolKey.tick_spacing, 18, 6),
+        priceToTick(0.12, false, poolKey.tick_spacing, 18, 6)
     );
 
+    console.log('bounds', bounds);
     console.log('Pool key: ', poolKey);
-    declareAndDeployConcLiquidityVault(
-        poolKey,
-        bounds,
-        1000, // 10% fee
-        "0x06419f7DeA356b74bC1443bd1600AB3831b7808D1EF897789FacFAd11a172Da7", // fee collector
-        "tEkubo USDC/USDT",
-        "tEkUSDCUSDT",
-     );
+    // declareAndDeployConcLiquidityVault(
+    //     poolKey,
+    //     bounds,
+    //     1000, // 10% fee
+    //     "0x06419f7DeA356b74bC1443bd1600AB3831b7808D1EF897789FacFAd11a172Da7", // fee collector
+    //     "tEkubo STRK/USDC",
+    //     "tEkSTRKUSDC",
+    //  );
     // rebalance();
 
     // upgrade()
