@@ -58,7 +58,7 @@ source = "git+https://github.com/keep-starknet-strange/alexandria.git?rev=475eaf
 [[package]]
 name = "ekubo"
 version = "0.1.0"
-source = "git+https://github.com/EkuboProtocol/abis.git?branch=main#edb6de8c9baf515f1053bbab3d86825d54a63bc3"
+source = "git+https://github.com/EkuboProtocol/abis.git?rev=edb6de8c9baf515f1053bbab3d86825d54a63bc3#edb6de8c9baf515f1053bbab3d86825d54a63bc3"
 
 [[package]]
 name = "openzeppelin"

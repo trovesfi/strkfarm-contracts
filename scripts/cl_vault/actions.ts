@@ -78,8 +78,7 @@ async function main() {
 async function harvest() {
     const provider = getRpcProvider();
     const config = getMainnetConfig();
-    const pricer = new PricerRedis(config, await Global.getTokens());
-    await pricer.initRedis(process.env.REDIS_URL!);
+    const pricer = new PricerFromApi(config, await Global.getTokens());
     console.log('Pricer ready');
 
     const mod = new EkuboCLVault(config, pricer, EkuboCLVaultStrategies[0]);
