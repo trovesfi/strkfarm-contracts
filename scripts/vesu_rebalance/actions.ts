@@ -1,4 +1,4 @@
-import { VesuRebalanceStrategies, VesuRebalance, getMainnetConfig, Global, Pricer, Web3Number, ContractAddr } from '@strkfarm/sdk';
+import { VesuRebalanceStrategies, VesuRebalance, getMainnetConfig, Global, Pricer, Web3Number, ContractAddr, PricerFromApi } from '@strkfarm/sdk';
 import { ACCOUNT_NAME, getAccount, getRpcProvider } from '../lib/utils';
 import { Account, Call, Contract, TransactionExecutionStatus, uint256 } from 'starknet';
 
@@ -15,7 +15,6 @@ async function main() {
     // console.log(await vesuRebalance.getTVL())
 
     // const acc = getAccount(ACCOUNT_NAME);
-    const acc = new Account(getRpcProvider(), process.env.ADDRESS!, process.env.PK!, "1", '0x3');
     
     // const depositCalls = await vesuRebalance.depositCall(
     //     {
@@ -27,8 +26,8 @@ async function main() {
     // const gas = await acc.estimateInvokeFee(depositCalls);
     // console.log(`Estimated gas: `, gas);
 
-    const fees = await vesuRebalance.getFee(await vesuRebalance.getPools());
-    console.log(`Fees: ${JSON.stringify(fees)}`);
+    // const fees = await vesuRebalance.getFee(await vesuRebalance.getPools());
+    // console.log(`Fees: ${JSON.stringify(fees)}`);
     // const tx = await acc.execute(depositCalls);
     // console.log(tx.transaction_hash);
     // await getRpcProvider().waitForTransaction(tx.transaction_hash, {
@@ -70,9 +69,7 @@ async function harvest() {
     const contracts = VesuRebalanceStrategies;
     const riskAcc = getAccount('risk-manager', 'accounts-risk.json', process.env.ACCOUNT_SECURE_PASSWORD_RISK);
     const config = getMainnetConfig();
-    const pricer = new Pricer(config, await Global.getTokens());
-    pricer.start();
-    await pricer.waitTillReady();
+    const pricer = new PricerFromApi(config, await Global.getTokens());
     console.log('Pricer ready');
 
     const calls: Call[] = [];

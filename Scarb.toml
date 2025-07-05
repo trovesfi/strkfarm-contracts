@@ -11,7 +11,7 @@ alexandria_storage = { git = "https://github.com/keep-starknet-strange/alexandri
 alexandria_data_structures = { git = "https://github.com/keep-starknet-strange/alexandria.git", rev = "475eaf015f4e997cff8ec31a5e7b4ab3f9a86e32" }
 openzeppelin = "0.18.0"
 openzeppelin_introspection = "0.18.0"
-ekubo = { git = "https://github.com/EkuboProtocol/abis.git", branch = "main"}
+ekubo = { git = "https://github.com/EkuboProtocol/abis.git", rev = "edb6de8c9baf515f1053bbab3d86825d54a63bc3"}
 starknet = ">=2.6.0" # cairo version
 
 [dev-dependencies]
@@ -98,6 +98,11 @@ block_id.number = "1256209"
 name = "mainnet_1446151"
 url = "$MAINNET_RPC_URL"
 block_id.number = "1446151"
+
+[[tool.snforge.fork]]
+name = "mainnet_1531861"
+url = "$MAINNET_RPC_URL"
+block_id.number = "1531861"
 
 [profile.dev.cairo]
 unstable-add-statements-code-locations-debug-info = true
