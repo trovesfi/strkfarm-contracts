@@ -10,9 +10,10 @@ async function main() {
     const pricer = new PricerFromApi(config, await Global.getTokens());
     console.log('Pricer ready');
 
-    const mod = new EkuboCLVault(config, pricer, EkuboCLVaultStrategies[1]);
+    const mod = new EkuboCLVault(config, pricer, EkuboCLVaultStrategies[2]);
 
-    const user = ContractAddr.from('0x0055741fd3ec832f7b9500e24a885b8729f213357be4a8e209c4bca1f3b909ae')
+    const acc = getAccount('strkfarmadmin');
+    const user = ContractAddr.from(acc.address);
     const userTVL = await mod.getUserTVL(user);
     console.log(`User TVL: ${JSON.stringify(userTVL)}`);
 
@@ -21,36 +22,28 @@ async function main() {
 
     const apy = await mod.netAPY();
     console.log(`Net APY: ${JSON.stringify(apy)}`);
-    // 21.05884839475128
-    // const myDepositAmounts = {
+
+    const currentPrice = await mod.getCurrentPrice();
+    console.log(`Current price: ${JSON.stringify(currentPrice)}`);
+
+    // const depositInputs = await mod.matchInputAmounts({
     //     token0: {
-    //         tokenInfo: {
-    //             name: 'xSTRK',
-    //             symbol: 'xSTRK',
-    //             decimals: 18,
-    //             logo: '',
-    //             address: ContractAddr.from(xSTRK)
-    //         },
-    //         amount: new Web3Number(1, 18)
+    //         tokenInfo: mod.metadata.depositTokens[0],
+    //         amount: new Web3Number(1, 18) // 1 STRK
     //     },
     //     token1: {
-    //         tokenInfo: {
-    //             name: 'STRK',
-    //             symbol: 'STRK',
-    //             decimals: 18,
-    //             logo: '',
-    //             address: ContractAddr.from(STRK)
-    //         },
-    //         amount: new Web3Number(1, 18)
+    //         tokenInfo: mod.metadata.depositTokens[1],
+    //         amount: new Web3Number(0, 6) // 1 USDC
     //     }
-    // }
-    // const depositAmounts = await mod.getDepositAmounts(myDepositAmounts);
+    // })
+    // console.log(`Deposit inputs: token0: ${depositInputs.token0.amount}, token1: ${depositInputs.token1.amount}`);
+    // 21.05884839475128
+    // const depositAmounts = await mod.getDepositAmounts(depositInputs);
     // console.log(`Deposit amounts: token0: ${depositAmounts.token0.amount}, token1: ${depositAmounts.token1.amount}`);
     
-    // const acc = getAccount('strkfarmadmin');
     // const caller = ContractAddr.from(acc.address);
 
-    // const depositCalls = await mod.depositCall(myDepositAmounts, caller);
+    // const depositCalls = await mod.depositCall(depositInputs, caller);
     // const tx = await acc.execute(depositCalls);
     // console.log(`Deposit tx: ${tx.transaction_hash}`);
     // await provider.waitForTransaction(tx.transaction_hash, {
