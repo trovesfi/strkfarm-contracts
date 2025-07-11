@@ -1,0 +1,5 @@
+## Check if something is zero
+- For numeric variables like u256, felt252, etc, u can directly check if they are zero using `if variable == 0`.
+- For variables like `ContractAddress`, you can check if they are zero by using the `is_zero()` or `is_non_zero()`  
+for non-zero check. Must import `use core::num::traits::Zero;` for this.
+

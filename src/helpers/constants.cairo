@@ -224,3 +224,7 @@ pub fn EKUBO_POSITIONS() -> ContractAddress {
 pub fn EKUBO_POSITIONS_NFT() -> ContractAddress {
     contract_address_const::<0x07b696af58c967c1b14c9dde0ace001720635a660a8e90c565ea459345318b30>()
 }
+
+pub fn ACCESS_CONTROL() -> ContractAddress {
+    contract_address_const::<0x636a3f51cc37f5729e4da4b1de6a8549a28f3c0d5bf3b17f150971e451ff9c2>()
+}

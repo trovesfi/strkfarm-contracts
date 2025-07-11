@@ -148,25 +148,30 @@ async function upgrade() {
     console.log(`Upgrade done`);
 }
 
+async function deployRebalancer() {
+    const { class_hash } = await myDeclare("ClVaultRebalancer");
+    await deployContract("ClVaultRebalancer", class_hash, {});
+}
+
 // 0x104d7db720522a6
 // 0x104d7db720522a6
 if (require.main === module) {
     // deploy cl vault
-    const poolKey = createPoolKey(
-        STRK,
-        USDC,
-        '170141183460469235273462165868118016',
-        1000,
-        0
-    );
+    // const poolKey = createPoolKey(
+    //     STRK,
+    //     USDC,
+    //     '170141183460469235273462165868118016',
+    //     1000,
+    //     0
+    // );
 
-    const bounds = createBounds(
-        priceToTick(0.10, false, poolKey.tick_spacing, 18, 6),
-        priceToTick(0.12, false, poolKey.tick_spacing, 18, 6)
-    );
+    // const bounds = createBounds(
+    //     priceToTick(0.10, false, poolKey.tick_spacing, 18, 6),
+    //     priceToTick(0.12, false, poolKey.tick_spacing, 18, 6)
+    // );
 
-    console.log('bounds', bounds);
-    console.log('Pool key: ', poolKey);
+    // console.log('bounds', bounds);
+    // console.log('Pool key: ', poolKey);
     // declareAndDeployConcLiquidityVault(
     //     poolKey,
     //     bounds,
@@ -178,4 +183,5 @@ if (require.main === module) {
     // rebalance();
 
     // upgrade()
+    deployRebalancer();
 }

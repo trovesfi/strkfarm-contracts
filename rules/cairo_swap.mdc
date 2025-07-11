@@ -43,8 +43,6 @@ use strkfarm_contracts::components::swap::{AvnuMultiRouteSwapImpl, AvnuMultiRout
 // an oracle address is required during swap
 use strkfarm_contracts::interfaces::oracle::{IPriceOracleDispatcher, IPriceOracleDispatcherTrait};
 
-// Approve from token and amount to avnu address;
-let avnu_address = strkfarm_contracts::helpers::constants::AVNU_EX();
 let swap_path = AvnuMultiRouteSwap { ... };
 let oracle = IPriceOracleDispatcher { contract_address: strkfarm_contracts::helpers::constants::ORACLE_OURS() };
 let output = swap_path.swap(oracle);
@@ -79,6 +77,7 @@ You pay tokens to ekubo, mint and deposit (else just deposit if already minted) 
     - pool type 2: 0.05% fee, 0.1% tick spacing
         - fee: 170141183460469235273462165868118016
         - tick_spacing: 1000
+2. STRK/xSTRK => Pool doesnt exist. Use xSTRK/STRK instead.
 
 
 For any pool, sqrt_distance_limit is 18446748437148339061 if price is supposed to down on swap,  

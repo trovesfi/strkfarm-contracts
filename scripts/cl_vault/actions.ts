@@ -1,6 +1,7 @@
 import { ContractAddr, DualActionAmount, EkuboCLVault, EkuboCLVaultStrategies, getMainnetConfig, Global, Pricer, PricerFromApi, PricerRedis, Web3Number } from "@strkfarm/sdk";
 import { getAccount, getRpcProvider } from "../lib/utils";
 import { STRK, xSTRK } from "../lib/constants";
+import { TransactionExecutionStatus } from "starknet";
 
 async function main() {
     const provider = getRpcProvider();
@@ -10,7 +11,7 @@ async function main() {
     const pricer = new PricerFromApi(config, await Global.getTokens());
     console.log('Pricer ready');
 
-    const mod = new EkuboCLVault(config, pricer, EkuboCLVaultStrategies[2]);
+    const mod = new EkuboCLVault(config, pricer, EkuboCLVaultStrategies[0]);
 
     const acc = getAccount('strkfarmadmin');
     const user = ContractAddr.from(acc.address);
@@ -95,9 +96,15 @@ async function harvest() {
     } else {
         console.log('No harvest calls');
     }
+
+    await provider.waitForTransaction(myHash, {
+        successStates: [TransactionExecutionStatus.SUCCEEDED],
+        errorStates: [TransactionExecutionStatus.REJECTED, TransactionExecutionStatus.REVERTED]
+    });
+    
 }
 
 if (require.main === module) {
-    // main();
-    harvest();
+    main();
+    // harvest();
 }

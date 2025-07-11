@@ -104,6 +104,11 @@ name = "mainnet_1531861"
 url = "$MAINNET_RPC_URL"
 block_id.number = "1531861"
 
+[[tool.snforge.fork]]
+name = "mainnet_1548957"
+url = "$MAINNET_RPC_URL"
+block_id.number = "1548957"
+
 [profile.dev.cairo]
 unstable-add-statements-code-locations-debug-info = true
 unstable-add-statements-functions-debug-info = true

@@ -48,6 +48,12 @@ pub mod strategies {
         pub mod cl_vault;
         #[cfg(test)]
         pub mod test;
+
+        pub mod rebalancer {
+            pub mod rebalancer;
+            #[cfg(test)]
+            pub mod test_rebalancer;
+        }
     }
 }
 
@@ -59,4 +65,9 @@ pub mod tests {
 pub mod mocks {
     pub mod defi_spring_snf;
     pub mod defi_spring_ekubo;
+}
+
+pub mod unaudited {
+    pub mod vesu_flash;
+    pub mod IFlashloan;
 }

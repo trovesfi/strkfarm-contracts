@@ -39,6 +39,28 @@ async function transferSuperAdmin() {
     console.log(`Super admin transferred to timelock`);
 }
 
+async function grantRelayerRole() {
+    const acc = getAccount(accountKeyMap[SUPER_ADMIN]);
+    const provider = getRpcProvider();
+    const cls = await provider.getClassAt(ACCESS_CONTROL);
+    const accessControl = new Contract(cls.abi, ACCESS_CONTROL, provider);  
+
+    const _RELAYER = '0x2f2183e09bbbe50755061d79aa28fd452e7cb82238ebf7038f52442e4538f80'; // rebalancer address
+    const call = await accessControl.populate("grant_role", [
+        hash.getSelectorFromName('RELAYER'),
+        _RELAYER
+    ]);
+    
+    const scheduleCall = await scheduleBatch([call], "0", "0x0", true);
+    const executeCall = await executeBatch([call], "0", "0x0", true);
+    const tx = await acc.execute([...scheduleCall, ...executeCall]);
+    console.log(`Granted relayer role. tx: ${tx.transaction_hash}`);
+    await provider.waitForTransaction(tx.transaction_hash, {
+        successStates: [TransactionExecutionStatus.SUCCEEDED]
+    });
+    console.log(`Relayer role granted`);
+}
+
 async function addGovernor() {
     const acc = getAccount(accountKeyMap[SUPER_ADMIN]);
     const provider = getRpcProvider();
@@ -86,5 +108,6 @@ if (require.main === module) {
     // declareAndDeployAccessControl().then(console.log).catch(console.error);
     // transferSuperAdmin().catch(console.error);
     // addGovernor().catch(console.error);
-    renounceRole().catch(console.error);
+    // renounceRole().catch(console.error);
+    grantRelayerRole().catch(console.error);
 }
