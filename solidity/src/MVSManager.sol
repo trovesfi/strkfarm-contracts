@@ -5,7 +5,9 @@ import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import "./interfaces/IMVSSubExtension.sol";
+import "./interfaces/IYieldExtension.sol";
 
 /**
  * @title MVSManager
@@ -37,6 +39,9 @@ contract MVSManager is ERC4626, AccessControl, Pausable, ReentrancyGuard {
     /// @notice Array of registered extensions
     IMVSSubExtension[] public extensions;
 
+    /// @notice Mapping to track which extensions support yield operations
+    mapping(address => bool) public isYieldExtension;
+
     /// @notice Mapping of combination ID to rebalance combination
     mapping(uint256 => RebalanceCombination) public rebalanceCombinations;
 
@@ -51,6 +56,8 @@ contract MVSManager is ERC4626, AccessControl, Pausable, ReentrancyGuard {
     event RebalanceCombinationDeactivated(uint256 indexed combinationId);
     event RebalanceExecuted(uint256 indexed combinationId, address indexed executor);
     event EmergencyWithdrawExecuted(uint256 indexed extensionIndex, uint256 amount);
+    event YieldHarvested(uint256 indexed extensionIndex, uint256 amount, address recipient);
+    event AllExtensionsHarvested(uint256 totalHarvested);
 
     /// @notice Custom errors
     error MaxExtensionsReached();
@@ -109,6 +116,15 @@ contract MVSManager is ERC4626, AccessControl, Pausable, ReentrancyGuard {
         if (extension.asset() != asset()) revert InvalidExtension();
 
         extensions.push(extension);
+        
+        // Check if extension supports yield operations
+        try IERC165(address(extension)).supportsInterface(type(IYieldExtension).interfaceId) returns (bool supported) {
+            isYieldExtension[address(extension)] = supported;
+        } catch {
+            // Extension doesn't support ERC165 or IYieldExtension
+            isYieldExtension[address(extension)] = false;
+        }
+        
         emit ExtensionAdded(address(extension), extensions.length - 1);
     }
 
@@ -120,6 +136,9 @@ contract MVSManager is ERC4626, AccessControl, Pausable, ReentrancyGuard {
         if (extensionIndex >= extensions.length) revert ExtensionNotFound();
 
         address extensionAddress = address(extensions[extensionIndex]);
+        
+        // Clean up yield extension mapping
+        isYieldExtension[extensionAddress] = false;
         
         // Move last element to the removed position and pop
         extensions[extensionIndex] = extensions[extensions.length - 1];
@@ -237,6 +256,80 @@ contract MVSManager is ERC4626, AccessControl, Pausable, ReentrancyGuard {
         }
 
         emit RebalanceExecuted(combinationId, msg.sender);
+    }
+
+    /**
+     * @notice Harvests yield from a specific extension
+     * @param extensionIndex Index of the extension to harvest from
+     * @param recipient Address to receive harvested yield
+     * @param data Additional data for harvest operation
+     */
+    function harvestExtension(uint256 extensionIndex, address recipient, bytes calldata data) 
+        external 
+        onlyRole(REBALANCER_ROLE) 
+    {
+        if (extensionIndex >= extensions.length) revert ExtensionNotFound();
+        
+        address extensionAddress = address(extensions[extensionIndex]);
+        if (!isYieldExtension[extensionAddress]) {
+            return; // Not a yield extension, skip silently
+        }
+
+        IYieldExtension yieldExt = IYieldExtension(extensionAddress);
+        (uint256[] memory amounts, address[] memory tokens) = yieldExt.harvest(recipient, data);
+        
+        uint256 totalHarvested = 0;
+        for (uint256 i = 0; i < amounts.length; i++) {
+            totalHarvested += amounts[i];
+        }
+        
+        emit YieldHarvested(extensionIndex, totalHarvested, recipient);
+    }
+
+    /**
+     * @notice Harvests yield from all yield-supporting extensions
+     * @param recipient Address to receive harvested yield
+     */
+    function harvestAllExtensions(address recipient) external onlyRole(REBALANCER_ROLE) {
+        uint256 totalHarvested = 0;
+        
+        for (uint256 i = 0; i < extensions.length; i++) {
+            address extensionAddress = address(extensions[i]);
+            if (isYieldExtension[extensionAddress]) {
+                try IYieldExtension(extensionAddress).harvest(recipient, "") returns (
+                    uint256[] memory amounts, 
+                    address[] memory /* tokens */
+                ) {
+                    for (uint256 j = 0; j < amounts.length; j++) {
+                        totalHarvested += amounts[j];
+                    }
+                } catch {
+                    // Skip if harvest fails
+                    continue;
+                }
+            }
+        }
+        
+        emit AllExtensionsHarvested(totalHarvested);
+    }
+
+    /**
+     * @notice Compounds yield for a specific extension
+     * @param extensionIndex Index of the extension to compound
+     * @param data Additional data for compound operation
+     */
+    function compoundExtension(uint256 extensionIndex, bytes calldata data) 
+        external 
+        onlyRole(REBALANCER_ROLE) 
+    {
+        if (extensionIndex >= extensions.length) revert ExtensionNotFound();
+        
+        address extensionAddress = address(extensions[extensionIndex]);
+        if (!isYieldExtension[extensionAddress]) {
+            return; // Not a yield extension, skip silently
+        }
+
+        IYieldExtension(extensionAddress).compound(data);
     }
 
     /**

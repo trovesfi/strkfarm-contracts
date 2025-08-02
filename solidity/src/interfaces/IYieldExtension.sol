@@ -2,13 +2,14 @@
 pragma solidity ^0.8.20;
 
 import "./IMVSSubExtension.sol";
+import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 
 /**
  * @title IYieldExtension
  * @notice Extended interface for yield-generating extensions
  * @dev Adds yield harvesting and performance tracking capabilities
  */
-interface IYieldExtension is IMVSSubExtension {
+interface IYieldExtension is IMVSSubExtension, IERC165 {
     /**
      * @notice Harvests accumulated yield/rewards
      * @param recipient Address to receive harvested tokens
