@@ -8,3 +8,10 @@ coverage_report
 node_modules
 .env
 class_hashes.json
+
+# Solidity build artifacts
+solidity/node_modules/
+solidity/cache/
+solidity/artifacts/
+solidity/typechain-types/
+solidity/coverage/

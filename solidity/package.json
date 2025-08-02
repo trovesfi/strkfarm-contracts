@@ -1,0 +1,20 @@
+{
+  "name": "troves-solidity-contracts",
+  "version": "1.0.0",
+  "description": "Solidity contracts for Troves protocol",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "lint": "solhint 'src/**/*.sol'"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^5.0.0",
+    "@types/mocha": "^10.0.0",
+    "@types/node": "^20.0.0",
+    "forge-std": "^1.1.2",
+    "hardhat": "^2.22.0",
+    "solhint": "^5.0.0",
+    "typescript": "^5.0.0"
+  }
+}
