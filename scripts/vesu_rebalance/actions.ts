@@ -1,3 +1,5 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import { VesuRebalanceStrategies, VesuRebalance, getMainnetConfig, Global, Pricer, Web3Number, ContractAddr, PricerFromApi } from '@strkfarm/sdk';
 import { ACCOUNT_NAME, getAccount, getRpcProvider } from '../lib/utils';
 import { Account, Call, Contract, TransactionExecutionStatus, uint256 } from 'starknet';
@@ -68,7 +70,7 @@ async function main() {
 async function harvest() {
     const contracts = VesuRebalanceStrategies;
     const riskAcc = getAccount('risk-manager', 'accounts-risk.json', process.env.ACCOUNT_SECURE_PASSWORD_RISK);
-    const config = getMainnetConfig();
+    const config = getMainnetConfig(process.env.RPC_URL!);
     const pricer = new PricerFromApi(config, await Global.getTokens());
     console.log('Pricer ready');
 

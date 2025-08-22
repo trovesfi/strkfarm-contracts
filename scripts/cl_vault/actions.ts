@@ -1,10 +1,12 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import { ContractAddr, DualActionAmount, EkuboCLVault, EkuboCLVaultStrategies, getMainnetConfig, Global, Pricer, PricerFromApi, PricerRedis, Web3Number } from "@strkfarm/sdk";
 import { getAccount, getRpcProvider } from "../lib/utils";
 import { STRK, xSTRK } from "../lib/constants";
 
 async function main() {
     const provider = getRpcProvider();
-    const config = getMainnetConfig();
+    const config = getMainnetConfig(process.env.RPC_URL!);
     // const pricer = new PricerRedis(config, await Global.getTokens());
     // await pricer.initRedis(process.env.REDIS_URL!);
     const pricer = new PricerFromApi(config, await Global.getTokens());
@@ -77,7 +79,7 @@ async function main() {
 
 async function harvest() {
     const provider = getRpcProvider();
-    const config = getMainnetConfig();
+    const config = getMainnetConfig(process.env.RPC_URL!);
     const pricer = new PricerFromApi(config, await Global.getTokens());
     console.log('Pricer ready');
 
