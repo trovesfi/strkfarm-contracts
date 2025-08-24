@@ -2,7 +2,7 @@ use starknet::ContractAddress;
 
 // Define the contract interface
 #[starknet::interface]
-pub trait IAssetReporter<TContractState> {
+pub trait IAumOracle<TContractState> {
     /// Reports current assets and estimated delta, updating internal estimates.
     /// Only callable by accounts with the RELAYER_ROLE.
     fn report(ref self: TContractState, current_assets: u256, new_estimated_assets_delta: u256);
@@ -30,7 +30,7 @@ const RELAYER_ROLE: felt252 = selector!("RELAYER_ROLE");
 
 // Define the contract module
 #[starknet::contract]
-pub mod AssetReporter {
+pub mod AumOracle {
     // Core library imports
     use super::{RELAYER_ROLE, IVaultDispatcherTrait};
     use starknet::{ContractAddress, ClassHash};
@@ -108,7 +108,7 @@ pub mod AssetReporter {
 
     // Implement the contract interface <a href="https://docs.starknet.io/guides/quickstart/hellostarknet" target="_blank" rel="noopener noreferrer" className="bg-light-secondary dark:bg-dark-secondary px-1 rounded ml-1 no-underline text-xs text-black/70 dark:text-white/70 relative hover:underline">6</a><a href="https://book.cairo-lang.org/ch100-00-introduction-to-smart-contracts.html" target="_blank" rel="noopener noreferrer" className="bg-light-secondary dark:bg-dark-secondary px-1 rounded ml-1 no-underline text-xs text-black/70 dark:text-white/70 relative hover:underline">7</a>
     #[abi(embed_v0)]
-    pub impl AssetReporterImpl of super::IAssetReporter<ContractState> {
+    pub impl AssetReporterImpl of super::IAumOracle<ContractState> {
         /// Reports current assets and estimated delta.
         ///
         /// This function updates the contract's internal estimated assets and
